@@ -39,7 +39,9 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 
-const BACKEND_BASE_URL = typeof window !== 'undefined' ? window.location.origin : '';
+const BACKEND_BASE_URL =
+  (import.meta as any).env.VITE_BACKEND_URL ||
+  (typeof window !== 'undefined' ? window.location.origin : '');
 
 /**
  * ----------------------------------------------------
