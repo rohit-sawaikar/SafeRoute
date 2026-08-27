@@ -44,6 +44,7 @@ import { RealRoute, fetchRealRoutes } from '../services/routingService';
 export interface EmergencyContactInfo {
   name: string;
   phone: string;
+  countryCode?: string;
   relationship?: string;
 }
 
