@@ -39,7 +39,10 @@ interface ApiResult<T> {
 async function postApi<T>(endpoint: string, body: any): Promise<ApiResult<T>> {
   const startTime = performance.now();
   try {
-    const response = await fetch(`/api/safety/${endpoint}`, {
+    const backendUrl =
+      (import.meta as any).env.VITE_BACKEND_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : '');
+    const response = await fetch(`${backendUrl}/api/safety/${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

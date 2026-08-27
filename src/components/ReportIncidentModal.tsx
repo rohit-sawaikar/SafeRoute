@@ -121,7 +121,10 @@ export const ReportIncidentModal: React.FC = () => {
     setSubmitFeedback(null);
 
     try {
-      const res = await fetch('/api/safety/incidents/submit', {
+      const backendUrl =
+        (import.meta as any).env.VITE_BACKEND_URL ||
+        (typeof window !== 'undefined' ? window.location.origin : '');
+      const res = await fetch(`${backendUrl}/api/safety/incidents/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
