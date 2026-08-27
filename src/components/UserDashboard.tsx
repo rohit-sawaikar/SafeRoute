@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { reverseGeocode } from '../services/geocodingService';
+import { reverseGeocode, searchLocations } from '../services/geocodingService';
 import {
     User,
     Shield,
@@ -43,6 +43,9 @@ export const UserDashboard: React.FC<{
 
     // Routing Form State
     const [source, setSource] = useState('Detecting location...');
+    const [isOriginEdited, setIsOriginEdited] = useState(false);
+    const [originError, setOriginError] = useState<string | null>(null);
+
     const [destination, setDestination] = useState('');
     const [isPlanning, setIsPlanning] = useState(false);
 
@@ -53,14 +56,14 @@ export const UserDashboard: React.FC<{
         }
     }, []);
 
-    // Synchronize browser GPS coordinates to the Origin display value via reverseGeocode
+    // Synchronize browser GPS coordinates to the Origin display value via reverseGeocode if user hasn't typed manually
     useEffect(() => {
         let isMounted = true;
         const { lat, lng } = navigation.currentPosition;
 
         reverseGeocode(lat, lng)
             .then((address) => {
-                if (!isMounted) return;
+                if (!isMounted || isOriginEdited) return;
                 if (address) {
                     setSource(address.split(',')[0] || address);
                 } else {
@@ -68,14 +71,14 @@ export const UserDashboard: React.FC<{
                 }
             })
             .catch(() => {
-                if (!isMounted) return;
+                if (!isMounted || isOriginEdited) return;
                 setSource(`Current Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
             });
 
         return () => {
             isMounted = false;
         };
-    }, [navigation.currentPosition.lat, navigation.currentPosition.lng]);
+    }, [navigation.currentPosition.lat, navigation.currentPosition.lng, isOriginEdited]);
 
     // Discreet mode local toggle for UI privacy
     const [isDiscreet, setIsDiscreet] = useState(false);
@@ -93,19 +96,42 @@ export const UserDashboard: React.FC<{
     const handlePlanRouteSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!destination.trim()) return;
+        setOriginError(null);
         setIsPlanning(true);
         try {
-            // Setup dynamic origin using browser GPS coordinates
-            const currentLat = navigation.currentPosition.lat;
-            const currentLng = navigation.currentPosition.lng;
+            let currentLat = navigation.currentPosition.lat;
+            let currentLng = navigation.currentPosition.lng;
+            let originName = source.trim() || 'Current Location';
+            let displayAddr = source.trim() ? source.trim() : `Lat: ${currentLat.toFixed(5)}, Lng: ${currentLng.toFixed(5)}`;
+
+            // If user manually edited the Origin, geocode the typed address
+            if (isOriginEdited && source.trim()) {
+                const searchResults = await searchLocations(source.trim(), {
+                    latitude: currentLat,
+                    longitude: currentLng,
+                });
+
+                if (searchResults && searchResults.length > 0) {
+                    const topResult = searchResults[0];
+                    currentLat = topResult.latitude;
+                    currentLng = topResult.longitude;
+                    originName = topResult.name;
+                    displayAddr = topResult.displayAddress;
+                } else {
+                    setOriginError('Unable to find this origin location. Please check the spelling or try a different place.');
+                    setIsPlanning(false);
+                    return;
+                }
+            }
 
             const origLocationObj = {
-                id: 'orig_current_location_' + Date.now(),
-                name: source || 'Current Location',
-                displayAddress: source ? source : `Lat: ${currentLat.toFixed(5)}, Lng: ${currentLng.toFixed(5)}`,
+                id: 'orig_location_' + Date.now(),
+                name: originName,
+                displayAddress: displayAddr,
                 latitude: currentLat,
                 longitude: currentLng,
             };
+
             // Geocode or mock destination location
             const destLocationObj = {
                 id: 'dest_' + Date.now(),
@@ -332,21 +358,48 @@ export const UserDashboard: React.FC<{
                         <form onSubmit={handlePlanRouteSubmit} className="space-y-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="relative">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1.5">Origin Location</label>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase block">Origin Location</label>
+                                        {isOriginEdited && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsOriginEdited(false);
+                                                    setOriginError(null);
+                                                    const { lat, lng } = navigation.currentPosition;
+                                                    reverseGeocode(lat, lng).then((addr) => {
+                                                        setSource(addr ? addr.split(',')[0] : `Current Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+                                                    });
+                                                }}
+                                                className="text-[10px] text-cyan-500 hover:underline font-semibold cursor-pointer"
+                                            >
+                                                Use GPS Location
+                                            </button>
+                                        )}
+                                    </div>
                                     <div className="relative">
                                         <MapPin className="absolute left-3.5 top-3.5 w-4.5 h-4.5 text-gray-400" />
                                         <input
                                             type="text"
                                             value={source}
-                                            onChange={(e) => setSource(e.target.value)}
-                                            disabled
-                                            placeholder="My Coordinates (Sitabuldi)"
-                                            className={`w-full pl-10 pr-4 py-3 text-xs rounded-2xl border font-semibold outline-hidden cursor-not-allowed ${isLight
-                                                ? 'bg-slate-100 border-slate-200 text-slate-500'
-                                                : 'bg-zinc-950 border-zinc-850 text-zinc-500'
+                                            onChange={(e) => {
+                                                setSource(e.target.value);
+                                                setIsOriginEdited(true);
+                                                if (originError) setOriginError(null);
+                                            }}
+                                            placeholder="Enter starting location or current GPS"
+                                            className={`w-full pl-10 pr-4 py-3 text-xs rounded-2xl border font-semibold outline-hidden transition-all focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 ${isLight
+                                                ? 'bg-white border-slate-200 text-slate-900'
+                                                : 'bg-zinc-950 border-zinc-850 text-zinc-100'
                                                 }`}
                                         />
                                     </div>
+                                    {originError && (
+                                        <p className="text-[11px] text-rose-500 font-semibold mt-1.5 flex items-center gap-1">
+                                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                            <span>{originError}</span>
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div>
