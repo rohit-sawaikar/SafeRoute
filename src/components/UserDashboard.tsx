@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { reverseGeocode } from '../services/geocodingService';
 import {
     User,
     Shield,
@@ -41,9 +42,40 @@ export const UserDashboard: React.FC<{
     const isLight = theme === 'light';
 
     // Routing Form State
-    const [source, setSource] = useState('Sitabuldi Center');
+    const [source, setSource] = useState('Detecting location...');
     const [destination, setDestination] = useState('');
     const [isPlanning, setIsPlanning] = useState(false);
+
+    // Auto-enable browser GPS on load if currently simulated
+    useEffect(() => {
+        if (navigation.gpsMode !== 'REAL_BROWSER') {
+            toggleRealGps();
+        }
+    }, []);
+
+    // Synchronize browser GPS coordinates to the Origin display value via reverseGeocode
+    useEffect(() => {
+        let isMounted = true;
+        const { lat, lng } = navigation.currentPosition;
+
+        reverseGeocode(lat, lng)
+            .then((address) => {
+                if (!isMounted) return;
+                if (address) {
+                    setSource(address.split(',')[0] || address);
+                } else {
+                    setSource(`Current Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+                }
+            })
+            .catch(() => {
+                if (!isMounted) return;
+                setSource(`Current Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [navigation.currentPosition.lat, navigation.currentPosition.lng]);
 
     // Discreet mode local toggle for UI privacy
     const [isDiscreet, setIsDiscreet] = useState(false);
@@ -63,13 +95,16 @@ export const UserDashboard: React.FC<{
         if (!destination.trim()) return;
         setIsPlanning(true);
         try {
-            // Setup origin
+            // Setup dynamic origin using browser GPS coordinates
+            const currentLat = navigation.currentPosition.lat;
+            const currentLng = navigation.currentPosition.lng;
+
             const origLocationObj = {
-                id: 'orig_sitabuldi_center',
-                name: 'Sitabuldi Center',
-                displayAddress: 'Sitabuldi, Nagpur, Maharashtra, India',
-                latitude: 21.1458,
-                longitude: 79.0882,
+                id: 'orig_current_location_' + Date.now(),
+                name: source || 'Current Location',
+                displayAddress: source ? source : `Lat: ${currentLat.toFixed(5)}, Lng: ${currentLng.toFixed(5)}`,
+                latitude: currentLat,
+                longitude: currentLng,
             };
             // Geocode or mock destination location
             const destLocationObj = {
