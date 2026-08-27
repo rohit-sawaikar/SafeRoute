@@ -30,7 +30,7 @@ import {
 
 export const safetyApiRouter = Router();
 
-safetyApiRouter.use(express.json());
+safetyApiRouter.use(express.json({ limit: '10mb' }));
 
 // REAL AUTHENTICATION ENDPOINTS
 safetyApiRouter.post('/auth/send-otp', async (req, res) => {

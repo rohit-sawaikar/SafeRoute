@@ -136,9 +136,27 @@ export const ReportIncidentModal: React.FC = () => {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to submit report');
+      let data: any = null;
+      const text = await res.text();
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          // Response is non-JSON or malformed
+        }
+      }
+
+      if (!res.ok) {
+        const errorMsg =
+          data?.error ||
+          (res.status === 413
+            ? 'Photo payload is too large. Please attach a smaller photo.'
+            : `Server error (${res.status}). Please try again.`);
+        throw new Error(errorMsg);
+      }
+
+      if (!data || !data.success) {
+        throw new Error(data?.error || 'Failed to submit report. Please check network connection.');
       }
 
       setSubmitFeedback({
