@@ -212,7 +212,7 @@ export const UserDashboard: React.FC<{
                                 {getGreeting()}, {isDiscreet ? 'User' : (currentUser?.displayName || 'Traveler')}!
                             </h1>
                             <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
-                                Session Secured • Nagpur Regional SafeHaven Active
+                                Session Secured • Nagpur Regional SafeRoute Active
                             </p>
                         </div>
                     </div>

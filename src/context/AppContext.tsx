@@ -142,11 +142,14 @@ interface AppContextType {
   disputeIncident: (id: string) => void;
   resolveIncident: (id: string) => void;
 
-  // Safe Havens
+  // Safe Havens / Nearby Help
   safeHavens: SafeHavenCandidate[];
   havenRankingData: SafeHavenRankingOutput | null;
   isHavenRankingLoading: boolean;
+  isPoiLoading: boolean;
+  poiError: string | null;
   refreshHavenRanking: () => Promise<void>;
+  refreshNearbyPlaces: () => Promise<void>;
 
   // Routes & Scoring
   routeScores: RouteScoreDetails[];
@@ -499,23 +502,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => unsub();
   }, []);
 
-  // Safe Havens
-  const [safeHavens, setSafeHavens] = useState<SafeHavenCandidate[]>(MOCK_SAFE_HAVENS);
-  const [havenRankingData, setHavenRankingData] = useState<SafeHavenRankingOutput | null>(() => ({
-    ranked_havens: MOCK_SAFE_HAVENS.map((h, i) => ({
-      id: h.id,
-      name: h.name,
-      type: h.type,
-      distance_meters: h.distance_meters,
-      is_open: h.is_open_now,
-      verification_level: h.is_verified_partner ? 'COMMUNITY_PARTNER' : 'PUBLIC_FACILITY',
-      accessibility_score: h.has_well_lit_entrance ? 95 : 75,
-      walk_time_min: h.walk_time_minutes,
-      navigation_tip: 'Main entrance on illuminated thoroughfare',
-      rank_score: 96 - i * 6,
-    })),
-    top_recommendation_reason: 'Nearest verified 24/7 partner with on-site staff and well-illuminated entrance.',
-  }));
+  // Safe Havens / Nearby Help
+  const [safeHavens, setSafeHavens] = useState<SafeHavenCandidate[]>([]);
+  const [isPoiLoading, setIsPoiLoading] = useState<boolean>(true);
+  const [poiError, setPoiError] = useState<string | null>(null);
+
+  const [havenRankingData, setHavenRankingData] = useState<SafeHavenRankingOutput | null>(null);
   const [isHavenRankingLoading, setIsHavenRankingLoading] = useState(false);
 
   // Route Scoring
@@ -587,25 +579,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   // Dynamic Route Scores calculation
-  // Dynamic Route Scores calculation
   const dynamicRouteScores = useMemo<RouteScoreDetails[]>(() => {
     if (!destinationLocation) return [];
     return calculatedRoutes as unknown as RouteScoreDetails[];
   }, [destinationLocation, calculatedRoutes]);
 
-  // Fetch real nearby POIs when user GPS position changes
-  useEffect(() => {
-    let isMounted = true;
+  // Fetch real nearby POIs dynamically based on user GPS location
+  const refreshNearbyPlaces = useCallback(async () => {
+    setIsPoiLoading(true);
+    setPoiError(null);
     const { lat, lng } = navigation.currentPosition;
-    fetchRealNearbyPlaces(lat, lng).then((places) => {
-      if (isMounted && places && places.length > 0) {
-        setSafeHavens(places);
+    try {
+      const places = await fetchRealNearbyPlaces(lat, lng, 3000);
+      setSafeHavens(places);
+      if (places.length === 0) {
+        setPoiError('No nearby emergency places or sanctuaries found within 3km.');
       }
-    });
-    return () => {
-      isMounted = false;
-    };
+    } catch (err: any) {
+      console.warn('Real nearby POI fetch error:', err);
+      setPoiError(err?.message || 'Unable to load nearby places. Please check network connection.');
+      setSafeHavens([]);
+    } finally {
+      setIsPoiLoading(false);
+    }
   }, [navigation.currentPosition.lat, navigation.currentPosition.lng]);
+
+  useEffect(() => {
+    refreshNearbyPlaces();
+  }, [refreshNearbyPlaces]);
 
   // Refresh Pulse
   const refreshSafetyPulse = useCallback(async () => {
@@ -1559,7 +1560,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         safeHavens,
         havenRankingData,
         isHavenRankingLoading,
+        isPoiLoading,
+        poiError,
         refreshHavenRanking,
+        refreshNearbyPlaces,
 
         routeScores: dynamicRouteScores,
         routeScoreData,

@@ -21,7 +21,7 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({ onComplete }) => {
         } else if (next < 75) {
           setStatusText('Analyzing community incident reports...');
         } else if (next < 95) {
-          setStatusText('Locating nearby Safe Havens...');
+          setStatusText('Locating nearby emergency places...');
         } else {
           setStatusText('Ready.');
         }

@@ -197,9 +197,9 @@ export const LandingPage: React.FC = () => {
               <div className="h-10 w-10 rounded-2xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-500/20 mb-4">
                 <Shield className="h-5 w-5" />
               </div>
-              <h3 className="font-bold text-sm mb-2">Safe Havens Directory</h3>
+              <h3 className="font-bold text-sm mb-2">Safe Places & Nearby Help</h3>
               <p className={`text-xs leading-relaxed ${isLight ? 'text-slate-600' : 'text-zinc-400'}`}>
-                Sanctuaries and public spaces marked as safe havens with verified lighting, staff presence, and direct routing.
+                Sanctuaries and public spaces marked as verified safe places with verified lighting, staff presence, and direct routing.
               </p>
             </div>
 
