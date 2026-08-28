@@ -198,8 +198,8 @@ const MainAppContent: React.FC = () => {
         {/* TAB 4: SIGNAL FEED */}
         {activeTab === 'signals' && <SignalFeedView />}
 
-        {/* TAB 5: AI ENGINE TOOLS */}
-        {activeTab === 'ai-engine' && <AiFunctionWorkbench />}
+        {/* TAB 5: AI ENGINE TOOLS (Admin / Developer Inspector Only) */}
+        {activeTab === 'ai-engine' && currentUser?.admin && <AiFunctionWorkbench />}
       </main>
 
       {/* Footer */}
