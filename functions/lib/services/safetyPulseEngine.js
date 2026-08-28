@@ -160,6 +160,13 @@ function computeAreaSafetyStatus(targetPoint, radiusMeters, nearbyIncidents, cur
             ? `${activeCount} unverified/active report in vicinity. Exercise standard awareness.`
             : `Late night time window (${hour}:00) — lower pedestrian density detected.`;
     }
+    // CRITICAL RULE: Do not immediately mark an area dangerous (red) from one uncorroborated report
+    if (safetyLevel === 'red' && corroboratedCount === 0 && activeCount <= 1) {
+        safetyLevel = 'yellow';
+        humanReadableWhy = activeCount === 1
+            ? `1 unverified report in vicinity. Exercise standard awareness.`
+            : `Exercise standard awareness.`;
+    }
     return {
         safetyLevel,
         overallScore: finalScore,

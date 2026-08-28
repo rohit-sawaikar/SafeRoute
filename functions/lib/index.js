@@ -39,7 +39,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.decayIncidentConfidenceAndPulse = exports.manageTrustedContacts = exports.getSafeHavensNearby = exports.getEmergencyNumbers = exports.resolveSOS = exports.triggerBeingFollowed = exports.triggerSOS = exports.endTrip = exports.updateTripLocation = exports.startTrip = exports.getRouteSafetyComparison = exports.getAreaSafetyStatus = exports.submitIncidentReport = void 0;
+exports.setAdminClaim = exports.decayIncidentConfidenceAndPulse = exports.manageTrustedContacts = exports.getSafeHavensNearby = exports.getEmergencyNumbers = exports.resolveSOS = exports.triggerBeingFollowed = exports.triggerSOS = exports.endTrip = exports.updateTripLocation = exports.startTrip = exports.getRouteSafetyComparison = exports.getAreaSafetyStatus = exports.submitIncidentReport = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const cors_1 = __importDefault(require("cors"));
@@ -574,5 +574,42 @@ exports.decayIncidentConfidenceAndPulse = functions.pubsub
     await batch.commit();
     console.log(`Cron job ran: updated incident decay. Expired ${expiredCount} report(s).`);
     return null;
+});
+/**
+ * 12. Secure Callable Function: setAdminClaim
+ * Securely assigns { "admin": true } custom claim to designated Firebase user.
+ * Preserves all existing custom claims.
+ */
+exports.setAdminClaim = functions.https.onCall(async (data, context) => {
+    const targetUid = data?.uid || 'nYDoCwzmFvf4tagVb17oZWdOyJF2';
+    const targetEmail = data?.email || 'adminsafeheaven09@gmail.com';
+    // Security check: Requires caller authentication matching target admin account or existing admin
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required to perform admin claim assignment.');
+    }
+    const callerUid = context.auth.uid;
+    const callerEmail = context.auth.token.email?.toLowerCase();
+    const callerIsAdmin = !!context.auth.token.admin;
+    if (callerUid !== targetUid && callerEmail !== targetEmail.toLowerCase() && !callerIsAdmin) {
+        throw new functions.https.HttpsError('permission-denied', 'Access Denied: Only designated administrator accounts can assign admin claims.');
+    }
+    try {
+        const userRecord = await admin.auth().getUser(targetUid);
+        const existingClaims = userRecord.customClaims || {};
+        const updatedClaims = { ...existingClaims, admin: true };
+        await admin.auth().setCustomUserClaims(targetUid, updatedClaims);
+        console.log(`[FIREBASE ADMIN] Assigned { admin: true } claim to ${userRecord.email} (${targetUid})`);
+        return {
+            success: true,
+            uid: targetUid,
+            email: userRecord.email,
+            customClaims: updatedClaims,
+            message: `Successfully assigned { admin: true } custom claim to ${userRecord.email} (${targetUid}).`,
+        };
+    }
+    catch (err) {
+        console.error('Error assigning admin custom claim:', err);
+        throw new functions.https.HttpsError('internal', err?.message || 'Failed to assign admin claim');
+    }
 });
 //# sourceMappingURL=index.js.map

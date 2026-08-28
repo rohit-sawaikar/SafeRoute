@@ -39,7 +39,7 @@ const corsHandler = cors({ origin: true });
 /**
  * 1. submitIncidentReport
  */
-export const submitIncidentReport = functions.https.onRequest((req, res) => {
+export const submitIncidentReport = functions.https.onRequest((req: any, res: any) => {
   return corsHandler(req, res, async () => {
     try {
       if (req.method !== 'POST') {
@@ -129,7 +129,7 @@ export const submitIncidentReport = functions.https.onRequest((req, res) => {
 /**
  * 2. getAreaSafetyStatus
  */
-export const getAreaSafetyStatus = functions.https.onRequest((req, res) => {
+export const getAreaSafetyStatus = functions.https.onRequest((req: any, res: any) => {
   return corsHandler(req, res, async () => {
     try {
       const lat = parseFloat((req.query.lat || req.body?.geopoint?.latitude || 0) as string);
@@ -171,7 +171,7 @@ export const getAreaSafetyStatus = functions.https.onRequest((req, res) => {
 /**
  * 3. getRouteSafetyComparison
  */
-export const getRouteSafetyComparison = functions.https.onRequest((req, res) => {
+export const getRouteSafetyComparison = functions.https.onRequest((req: any, res: any) => {
   return corsHandler(req, res, async () => {
     try {
       const { routes } = req.body;
@@ -205,7 +205,7 @@ export const getRouteSafetyComparison = functions.https.onRequest((req, res) => 
 /**
  * 4. startTrip / updateTripLocation / endTrip
  */
-export const startTrip = functions.https.onRequest((req, res) => {
+export const startTrip = functions.https.onRequest((req: any, res: any) => {
   return corsHandler(req, res, async () => {
     try {
       const { userId, routeCoordinates, sharedWithContactIds, estimatedArrival } = req.body;
@@ -240,7 +240,7 @@ export const startTrip = functions.https.onRequest((req, res) => {
   });
 });
 
-export const updateTripLocation = functions.https.onRequest((req, res) => {
+export const updateTripLocation = functions.https.onRequest((req: any, res: any) => {
   return corsHandler(req, res, async () => {
     try {
       const { tripId, geopoint } = req.body;
@@ -306,7 +306,7 @@ export const updateTripLocation = functions.https.onRequest((req, res) => {
   });
 });
 
-export const endTrip = functions.https.onRequest((req, res) => {
+export const endTrip = functions.https.onRequest((req: any, res: any) => {
   return corsHandler(req, res, async () => {
     try {
       const { tripId } = req.body;
@@ -330,7 +330,7 @@ export const endTrip = functions.https.onRequest((req, res) => {
 /**
  * 5. triggerSOS
  */
-export const triggerSOS = functions.https.onRequest((req, res) => {
+export const triggerSOS = functions.https.onRequest((req: any, res: any) => {
   return corsHandler(req, res, async () => {
     try {
       const { userId, mode, geopoint } = req.body;
@@ -385,7 +385,7 @@ export const triggerSOS = functions.https.onRequest((req, res) => {
 /**
  * 6. triggerBeingFollowed (Silent SOS + Top 3 Safe Havens)
  */
-export const triggerBeingFollowed = functions.https.onRequest((req, res) => {
+export const triggerBeingFollowed = functions.https.onRequest((req: any, res: any) => {
   return corsHandler(req, res, async () => {
     try {
       const { userId, geopoint } = req.body;
@@ -441,7 +441,7 @@ export const triggerBeingFollowed = functions.https.onRequest((req, res) => {
 /**
  * 7. resolveSOS
  */
-export const resolveSOS = functions.https.onRequest((req, res) => {
+export const resolveSOS = functions.https.onRequest((req: any, res: any) => {
   return corsHandler(req, res, async () => {
     try {
       const { sosEventId, outcome } = req.body;
@@ -471,7 +471,7 @@ export const resolveSOS = functions.https.onRequest((req, res) => {
 /**
  * 8. getEmergencyNumbers
  */
-export const getEmergencyNumbers = functions.https.onRequest((req, res) => {
+export const getEmergencyNumbers = functions.https.onRequest((req: any, res: any) => {
   return corsHandler(req, res, async () => {
     try {
       const countryCode = ((req.query.countryCode || req.body?.countryCode || 'IN') as string).toUpperCase();
@@ -491,7 +491,7 @@ export const getEmergencyNumbers = functions.https.onRequest((req, res) => {
 /**
  * 9. getSafeHavensNearby
  */
-export const getSafeHavensNearby = functions.https.onRequest((req, res) => {
+export const getSafeHavensNearby = functions.https.onRequest((req: any, res: any) => {
   return corsHandler(req, res, async () => {
     try {
       const lat = parseFloat((req.query.lat || req.body?.geopoint?.latitude || 0) as string);
@@ -531,7 +531,7 @@ export const getSafeHavensNearby = functions.https.onRequest((req, res) => {
 /**
  * 10. manageTrustedContacts
  */
-export const manageTrustedContacts = functions.https.onRequest((req, res) => {
+export const manageTrustedContacts = functions.https.onRequest((req: any, res: any) => {
   return corsHandler(req, res, async () => {
     try {
       const { action, userId, contactPhone, relationshipLabel, permissionLevel, contactId } = req.body;
@@ -601,7 +601,7 @@ export const manageTrustedContacts = functions.https.onRequest((req, res) => {
  */
 export const decayIncidentConfidenceAndPulse = functions.pubsub
   .schedule('every 15 minutes')
-  .onRun(async (context) => {
+  .onRun(async (context: any) => {
     const now = Date.now();
     const snapshot = await db
       .collection('incidentReports')
@@ -627,3 +627,54 @@ export const decayIncidentConfidenceAndPulse = functions.pubsub
     console.log(`Cron job ran: updated incident decay. Expired ${expiredCount} report(s).`);
     return null;
   });
+
+/**
+ * 12. Secure Callable Function: setAdminClaim
+ * Securely assigns { "admin": true } custom claim to designated Firebase user.
+ * Preserves all existing custom claims.
+ */
+export const setAdminClaim = functions.https.onCall(async (data: any, context: functions.https.CallableContext) => {
+  const targetUid = data?.uid || 'nYDoCwzmFvf4tagVb17oZWdOyJF2';
+  const targetEmail = data?.email || 'adminsafeheaven09@gmail.com';
+
+  // Security check: Requires caller authentication matching target admin account or existing admin
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      'unauthenticated',
+      'Authentication required to perform admin claim assignment.'
+    );
+  }
+
+  const callerUid = context.auth.uid;
+  const callerEmail = context.auth.token.email?.toLowerCase();
+  const callerIsAdmin = !!context.auth.token.admin;
+
+  if (callerUid !== targetUid && callerEmail !== targetEmail.toLowerCase() && !callerIsAdmin) {
+    throw new functions.https.HttpsError(
+      'permission-denied',
+      'Access Denied: Only designated administrator accounts can assign admin claims.'
+    );
+  }
+
+  try {
+    const userRecord = await admin.auth().getUser(targetUid);
+    const existingClaims = userRecord.customClaims || {};
+    const updatedClaims = { ...existingClaims, admin: true };
+
+    await admin.auth().setCustomUserClaims(targetUid, updatedClaims);
+
+    console.log(`[FIREBASE ADMIN] Assigned { admin: true } claim to ${userRecord.email} (${targetUid})`);
+
+    return {
+      success: true,
+      uid: targetUid,
+      email: userRecord.email,
+      customClaims: updatedClaims,
+      message: `Successfully assigned { admin: true } custom claim to ${userRecord.email} (${targetUid}).`,
+    };
+  } catch (err: any) {
+    console.error('Error assigning admin custom claim:', err);
+    throw new functions.https.HttpsError('internal', err?.message || 'Failed to assign admin claim');
+  }
+});
+

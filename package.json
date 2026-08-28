@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "seed": "npx tsx scripts/seedMockData.ts"
+    "seed": "npx tsx scripts/seedMockData.ts",
+    "admin:claim": "npx tsx scripts/setAdminClaim.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
