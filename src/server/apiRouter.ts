@@ -289,7 +289,15 @@ function getCategoryDefaultName(tags?: Record<string, string>): string {
   }
 }
 
-// REAL BACKEND PROXY FOR OVERPASS NEARBY PLACES
+// OVERPASS API MIRRORS FOR MAXIMUM RELIABILITY
+const OVERPASS_SERVERS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+
+// REAL BACKEND PROXY FOR OVERPASS NEARBY PLACES WITH MIRROR POOL & SAFE RESPONSE PARSING
 safetyApiRouter.get('/nearby-places', async (req, res) => {
   try {
     const lat = parseFloat(req.query.lat as string);
@@ -306,44 +314,60 @@ safetyApiRouter.get('/nearby-places', async (req, res) => {
     if (isNaN(radius) || radius < 500) radius = 500;
     if (radius > 10000) radius = 10000;
 
-    const overpassQuery = `
-      [out:json][timeout:20];
-      (
-        node["amenity"~"police|fire_station|hospital|clinic|pharmacy|doctors|bus_station|bank|post_office"](around:${radius},${lat},${lng});
-        way["amenity"~"police|fire_station|hospital|clinic|pharmacy|doctors|bus_station|bank|post_office"](around:${radius},${lat},${lng});
-        node["railway"~"station|subway_entrance"](around:${radius},${lat},${lng});
-        way["railway"~"station|subway_entrance"](around:${radius},${lat},${lng});
-        node["highway"~"bus_stop"](around:${radius},${lat},${lng});
-        node["emergency"](around:${radius},${lat},${lng});
-      );
-      out center 35;
-    `;
+    // Single-line clean Overpass QL query
+    const overpassQuery = `[out:json][timeout:15];(node["amenity"~"police|fire_station|hospital|clinic|pharmacy|doctors|bus_station|bank|post_office"](around:${radius},${lat},${lng});way["amenity"~"police|fire_station|hospital|clinic|pharmacy|doctors|bus_station|bank|post_office"](around:${radius},${lat},${lng});node["railway"~"station|subway_entrance"](around:${radius},${lat},${lng});way["railway"~"station|subway_entrance"](around:${radius},${lat},${lng});node["highway"~"bus_stop"](around:${radius},${lat},${lng});node["emergency"](around:${radius},${lat},${lng}););out center 35;`.trim();
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 18000);
+    let elements: any[] = [];
+    let fetchSuccess = false;
+    let lastErrorDetails = 'All Overpass mirrors failed or timed out';
 
-    const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'SafeRoute-Backend/1.0',
-      },
-      body: `data=${encodeURIComponent(overpassQuery)}`,
-      signal: controller.signal,
-    });
+    for (const serverUrl of OVERPASS_SERVERS) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 7000);
 
-    clearTimeout(timeoutId);
+      try {
+        const overpassRes = await fetch(serverUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'SafeRoute-Backend/1.0 (https://saferoute-1-rues.onrender.com)',
+          },
+          body: `data=${encodeURIComponent(overpassQuery)}`,
+          signal: controller.signal,
+        });
 
-    if (!overpassRes.ok) {
-      console.warn(`Overpass API upstream error: ${overpassRes.status} ${overpassRes.statusText}`);
-      return res.status(overpassRes.status >= 500 ? 502 : overpassRes.status).json({
-        success: false,
-        error: `Overpass API returned status ${overpassRes.status}`,
-      });
+        clearTimeout(timeoutId);
+        const rawText = await overpassRes.text();
+
+        if (!overpassRes.ok) {
+          console.warn(`[Overpass Proxy] ${serverUrl} returned HTTP ${overpassRes.status}. Snippet: ${rawText.substring(0, 150)}`);
+          lastErrorDetails = `${serverUrl} HTTP ${overpassRes.status}`;
+          continue;
+        }
+
+        if (!rawText.trim().startsWith('{')) {
+          console.warn(`[Overpass Proxy] ${serverUrl} returned non-JSON body. Snippet: ${rawText.substring(0, 150)}`);
+          lastErrorDetails = `${serverUrl} returned non-JSON content`;
+          continue;
+        }
+
+        const data = JSON.parse(rawText);
+        elements = data?.elements || [];
+        fetchSuccess = true;
+        break;
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        console.warn(`[Overpass Proxy] ${serverUrl} failed: ${err.name === 'AbortError' ? 'Timeout' : err.message}`);
+        lastErrorDetails = `${serverUrl} ${err.name === 'AbortError' ? 'Timeout' : err.message}`;
+      }
     }
 
-    const data = await overpassRes.json();
-    const elements = data?.elements || [];
+    if (!fetchSuccess) {
+      return res.status(502).json({
+        success: false,
+        error: `Unable to fetch nearby places from OpenStreetMap Overpass API (${lastErrorDetails}).`,
+      });
+    }
 
     const realPlaces = elements
       .map((item: any, idx: number) => {
@@ -389,11 +413,8 @@ safetyApiRouter.get('/nearby-places', async (req, res) => {
       places: realPlaces.slice(0, 20),
     });
   } catch (err: any) {
-    console.error('Overpass Proxy error:', err);
-    if (err.name === 'AbortError') {
-      return res.status(504).json({ success: false, error: 'Overpass API request timed out' });
-    }
-    res.status(500).json({ success: false, error: err?.message || 'Failed to fetch nearby places from Overpass API' });
+    console.error('Overpass Proxy fatal error:', err);
+    res.status(502).json({ success: false, error: err?.message || 'Failed to process nearby places request' });
   }
 });
 
