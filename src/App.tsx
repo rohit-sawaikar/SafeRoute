@@ -210,7 +210,7 @@ const MainAppContent: React.FC = () => {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Shield className="h-4 w-4 text-cyan-500" />
-            <span className={`font-medium ${isLight ? 'text-slate-800' : 'text-zinc-300'}`}>SafeHeaven Navigation</span>
+            <span className={`font-medium ${isLight ? 'text-slate-800' : 'text-zinc-300'}`}>Safe Route Navigation</span>
             <span>—</span>
             <span>Safety-First Travel Intelligence</span>
           </div>

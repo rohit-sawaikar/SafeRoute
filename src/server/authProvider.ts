@@ -233,7 +233,7 @@ export async function verifyOtpCode(
   if (!user) {
     user = {
       id: `usr_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
-      name: name?.trim() || 'SafeHeaven User',
+      name: name?.trim() || 'Safe Route User',
       phoneNumber,
       phoneVerified: true,
       createdAt: now,

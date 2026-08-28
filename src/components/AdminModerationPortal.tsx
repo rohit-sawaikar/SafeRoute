@@ -170,7 +170,7 @@ export const AdminModerationPortal: React.FC<{ isOpen: boolean; onClose: () => v
             </div>
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                SafeHeaven Community Moderation & Audit Console
+                Safe Route Community Moderation & Audit Console
                 <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-900/60 text-amber-300 border border-amber-700">
                   Admin Active
                 </span>

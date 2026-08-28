@@ -122,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-600 text-white shadow-sm">
               <Shield className="h-5 w-5" />
             </div>
-            <span className="font-bold tracking-tight text-base sm:text-lg">SafeHeaven</span>
+            <span className="font-bold tracking-tight text-base sm:text-lg">Safe Route</span>
           </div>
 
           {/* Quick Travel Mode Selector (Desktop) */}
