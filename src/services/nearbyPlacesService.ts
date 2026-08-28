@@ -88,86 +88,44 @@ function getCategoryDefaultName(tags?: Record<string, string>): string {
 }
 
 /**
- * Fetch real nearby places around (latitude, longitude) using OpenStreetMap Overpass API.
- * Radius default is 3000m (3km).
- * Throws error if request fails or network drops.
+ * Fetch real nearby places around (latitude, longitude) via the Safe Route backend proxy endpoint.
+ * Throws clean errors if backend or Overpass fails.
  */
 export async function fetchRealNearbyPlaces(
   latitude: number,
   longitude: number,
   radiusMeters: number = 3000
 ): Promise<SafeHavenCandidate[]> {
-  const query = `
-    [out:json][timeout:15];
-    (
-      node["amenity"~"police|fire_station|hospital|clinic|pharmacy|doctors"](around:${radiusMeters},${latitude},${longitude});
-      way["amenity"~"police|fire_station|hospital|clinic|pharmacy|doctors"](around:${radiusMeters},${latitude},${longitude});
-      node["railway"~"station|subway_entrance"](around:${radiusMeters},${latitude},${longitude});
-      node["amenity"~"bus_station|bank|post_office"](around:${radiusMeters},${latitude},${longitude});
-      node["emergency"](around:${radiusMeters},${latitude},${longitude});
-    );
-    out center 25;
-  `;
+  const backendUrl =
+    (import.meta as any).env?.VITE_BACKEND_URL ||
+    (typeof window !== 'undefined' ? window.location.origin : '');
 
-  const url = 'https://overpass-api.de/api/interpreter';
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `data=${encodeURIComponent(query)}`,
+  const endpoint = `${backendUrl}/api/safety/nearby-places?lat=${latitude}&lng=${longitude}&radius=${radiusMeters}`;
+
+  const response = await fetch(endpoint, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+    },
   });
 
   if (!response.ok) {
-    throw new Error(`POI Service HTTP Error ${response.status}`);
+    let errorMsg = `Unable to load nearby places (HTTP ${response.status})`;
+    try {
+      const errData = await response.json();
+      if (errData?.error) {
+        errorMsg = errData.error;
+      }
+    } catch (_) {}
+    throw new Error(errorMsg);
   }
 
   const data = await response.json();
-  const elements: OverpassElement[] = data?.elements || [];
-
-  if (elements.length === 0) {
-    return [];
+  if (!data?.success || !Array.isArray(data?.places)) {
+    throw new Error(data?.error || 'Invalid nearby places data received from server');
   }
 
-  const realPlaces: SafeHavenCandidate[] = elements
-    .map((item, idx) => {
-      const itemLat = item.lat ?? item.center?.lat;
-      const itemLon = item.lon ?? item.center?.lon;
-      if (!itemLat || !itemLon) return null;
-
-      const tags = item.tags || {};
-      const name = tags['name:en'] || tags.name || getCategoryDefaultName(tags);
-
-      const distMeters = calculateDistanceMeters(latitude, longitude, itemLat, itemLon);
-      const walkTime = Math.max(1, Math.round(distMeters / 75)); // ~4.5 km/h walking pace
-      const havenType = mapOsmTagToType(tags);
-
-      const street = tags['addr:street'] || '';
-      const houseNum = tags['addr:housenumber'] || '';
-      const city = tags['addr:city'] || '';
-      const address = [houseNum, street, city].filter(Boolean).join(' ') || `${itemLat.toFixed(4)}°, ${itemLon.toFixed(4)}°`;
-
-      const openingHoursStr = tags.opening_hours || '';
-      const isOpen247 = Boolean(openingHoursStr.includes('24/7')) || havenType === 'POLICE_STATION' || havenType === 'FIRE_STATION' || havenType === 'HOSPITAL';
-
-      return {
-        id: `osm_${item.id || idx}`,
-        name,
-        type: havenType,
-        distance_meters: distMeters,
-        is_open_now: isOpen247,
-        is_verified_partner: havenType === 'POLICE_STATION' || havenType === 'FIRE_STATION' || havenType === 'HOSPITAL',
-        has_security_staff: havenType === 'POLICE_STATION' || havenType === 'FIRE_STATION' || havenType === 'HOSPITAL',
-        has_well_lit_entrance: true,
-        walk_time_minutes: walkTime,
-        address: openingHoursStr ? `${address} (${openingHoursStr})` : address,
-        latitude: itemLat,
-        longitude: itemLon,
-      } as SafeHavenCandidate;
-    })
-    .filter((place): place is SafeHavenCandidate => place !== null);
-
-  // Sort by distance ascending
-  realPlaces.sort((a, b) => a.distance_meters - b.distance_meters);
-
-  return realPlaces.slice(0, 15);
+  return data.places;
 }
+
 

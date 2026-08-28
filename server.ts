@@ -57,6 +57,11 @@ app.get('/api/health', (req, res) => {
 });
 
 // Mount API routes
+app.get('/api/nearby-places', (req, res, next) => {
+  req.url = '/nearby-places';
+  safetyApiRouter(req, res, next);
+});
+
 app.use('/api/safety', safetyApiRouter);
 app.use('/api/saferoute', firebaseBridgeRouter);
 

@@ -237,6 +237,166 @@ safetyApiRouter.post('/safety-notification', async (req, res) => {
   }
 });
 
+/**
+ * Haversine formula calculation for distance in meters
+ */
+function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
+
+function mapOsmTagToType(tags?: Record<string, string>): string {
+  if (!tags) return 'OPEN_COMMERCIAL';
+  const amenity = tags.amenity?.toLowerCase() || '';
+  const railway = tags.railway?.toLowerCase() || '';
+  const highway = tags.highway?.toLowerCase() || '';
+  const emergency = tags.emergency?.toLowerCase() || '';
+
+  if (amenity === 'police') return 'POLICE_STATION';
+  if (amenity === 'fire_station' || emergency === 'fire_station') return 'FIRE_STATION';
+  if (amenity === 'hospital' || amenity === 'clinic' || tags.healthcare || amenity === 'doctors') return 'HOSPITAL';
+  if (amenity === 'pharmacy' || amenity === 'chemist') return 'PHARMACY_24_7';
+  if (railway || highway === 'bus_stop' || amenity === 'bus_station' || amenity === 'ferry_terminal') return 'TRANSIT_HUB';
+
+  return 'OPEN_COMMERCIAL';
+}
+
+function getCategoryDefaultName(tags?: Record<string, string>): string {
+  if (!tags) return 'Emergency Sanctuary';
+  const havenType = mapOsmTagToType(tags);
+  switch (havenType) {
+    case 'POLICE_STATION':
+      return 'Public Police Station';
+    case 'FIRE_STATION':
+      return 'Emergency Fire Station';
+    case 'HOSPITAL':
+      return 'Community Medical Center';
+    case 'PHARMACY_24_7':
+      return 'Local Pharmacy';
+    case 'TRANSIT_HUB':
+      return 'Public Transit Hub';
+    default:
+      return 'Verified Public Facility';
+  }
+}
+
+// REAL BACKEND PROXY FOR OVERPASS NEARBY PLACES
+safetyApiRouter.get('/nearby-places', async (req, res) => {
+  try {
+    const lat = parseFloat(req.query.lat as string);
+    const lng = parseFloat(req.query.lng as string);
+    let radius = parseInt(req.query.radius as string) || 3000;
+
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid latitude (-90 to 90) and longitude (-180 to 180) are required.',
+      });
+    }
+
+    if (isNaN(radius) || radius < 500) radius = 500;
+    if (radius > 10000) radius = 10000;
+
+    const overpassQuery = `
+      [out:json][timeout:20];
+      (
+        node["amenity"~"police|fire_station|hospital|clinic|pharmacy|doctors|bus_station|bank|post_office"](around:${radius},${lat},${lng});
+        way["amenity"~"police|fire_station|hospital|clinic|pharmacy|doctors|bus_station|bank|post_office"](around:${radius},${lat},${lng});
+        node["railway"~"station|subway_entrance"](around:${radius},${lat},${lng});
+        way["railway"~"station|subway_entrance"](around:${radius},${lat},${lng});
+        node["highway"~"bus_stop"](around:${radius},${lat},${lng});
+        node["emergency"](around:${radius},${lat},${lng});
+      );
+      out center 35;
+    `;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 18000);
+
+    const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'SafeRoute-Backend/1.0',
+      },
+      body: `data=${encodeURIComponent(overpassQuery)}`,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!overpassRes.ok) {
+      console.warn(`Overpass API upstream error: ${overpassRes.status} ${overpassRes.statusText}`);
+      return res.status(overpassRes.status >= 500 ? 502 : overpassRes.status).json({
+        success: false,
+        error: `Overpass API returned status ${overpassRes.status}`,
+      });
+    }
+
+    const data = await overpassRes.json();
+    const elements = data?.elements || [];
+
+    const realPlaces = elements
+      .map((item: any, idx: number) => {
+        const itemLat = item.lat ?? item.center?.lat;
+        const itemLon = item.lon ?? item.center?.lon;
+        if (!itemLat || !itemLon) return null;
+
+        const tags = item.tags || {};
+        const name = tags['name:en'] || tags.name || getCategoryDefaultName(tags);
+        const distMeters = calculateDistanceMeters(lat, lng, itemLat, itemLon);
+        const walkTime = Math.max(1, Math.round(distMeters / 75));
+        const havenType = mapOsmTagToType(tags);
+
+        const street = tags['addr:street'] || '';
+        const houseNum = tags['addr:housenumber'] || '';
+        const city = tags['addr:city'] || '';
+        const address = [houseNum, street, city].filter(Boolean).join(' ') || `${itemLat.toFixed(4)}°, ${itemLon.toFixed(4)}°`;
+        const openingHoursStr = tags.opening_hours || '';
+        const isOpen247 = Boolean(openingHoursStr.includes('24/7')) || havenType === 'POLICE_STATION' || havenType === 'FIRE_STATION' || havenType === 'HOSPITAL';
+
+        return {
+          id: `osm_${item.id || idx}`,
+          name,
+          type: havenType,
+          distance_meters: distMeters,
+          is_open_now: isOpen247,
+          is_verified_partner: havenType === 'POLICE_STATION' || havenType === 'FIRE_STATION' || havenType === 'HOSPITAL',
+          has_security_staff: havenType === 'POLICE_STATION' || havenType === 'FIRE_STATION' || havenType === 'HOSPITAL',
+          has_well_lit_entrance: true,
+          walk_time_minutes: walkTime,
+          address: openingHoursStr ? `${address} (${openingHoursStr})` : address,
+          latitude: itemLat,
+          longitude: itemLon,
+        };
+      })
+      .filter(Boolean);
+
+    realPlaces.sort((a: any, b: any) => a.distance_meters - b.distance_meters);
+
+    res.json({
+      success: true,
+      count: realPlaces.length,
+      places: realPlaces.slice(0, 20),
+    });
+  } catch (err: any) {
+    console.error('Overpass Proxy error:', err);
+    if (err.name === 'AbortError') {
+      return res.status(504).json({ success: false, error: 'Overpass API request timed out' });
+    }
+    res.status(500).json({ success: false, error: err?.message || 'Failed to fetch nearby places from Overpass API' });
+  }
+});
+
 // Health / Status endpoint
 safetyApiRouter.get('/status', (req, res) => {
   res.json({

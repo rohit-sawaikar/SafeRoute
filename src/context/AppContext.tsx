@@ -39,7 +39,7 @@ import {
 } from '../services/safetyAiService';
 import { GeocodedLocation } from '../services/geocodingService';
 import { RealRoute, fetchRealRoutes } from '../services/routingService';
-import { fetchRealNearbyPlaces } from '../services/nearbyPlacesService';
+import { fetchRealNearbyPlaces, calculateDistanceMeters } from '../services/nearbyPlacesService';
 
 
 export interface EmergencyContactInfo {
@@ -584,11 +584,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return calculatedRoutes as unknown as RouteScoreDetails[];
   }, [destinationLocation, calculatedRoutes]);
 
-  // Fetch real nearby POIs dynamically based on user GPS location
-  const refreshNearbyPlaces = useCallback(async () => {
+  const lastFetchedCoordsRef = React.useRef<{ lat: number; lng: number } | null>(null);
+
+  // Fetch real nearby POIs dynamically based on user GPS location with distance threshold check
+  const refreshNearbyPlaces = useCallback(async (force = false) => {
+    const { lat, lng } = navigation.currentPosition;
+
+    if (!force && lastFetchedCoordsRef.current) {
+      const distMoved = calculateDistanceMeters(
+        lastFetchedCoordsRef.current.lat,
+        lastFetchedCoordsRef.current.lng,
+        lat,
+        lng
+      );
+      // Throttle POI fetching to when user moves > 300 meters
+      if (distMoved < 300) {
+        return;
+      }
+    }
+
+    lastFetchedCoordsRef.current = { lat, lng };
     setIsPoiLoading(true);
     setPoiError(null);
-    const { lat, lng } = navigation.currentPosition;
     try {
       const places = await fetchRealNearbyPlaces(lat, lng, 3000);
       setSafeHavens(places);
