@@ -260,12 +260,13 @@ function mapOsmTagToType(tags?: Record<string, string>): string {
   const railway = tags.railway?.toLowerCase() || '';
   const highway = tags.highway?.toLowerCase() || '';
   const emergency = tags.emergency?.toLowerCase() || '';
+  const healthcare = tags.healthcare?.toLowerCase() || '';
 
   if (amenity === 'police') return 'POLICE_STATION';
-  if (amenity === 'fire_station' || emergency === 'fire_station') return 'FIRE_STATION';
-  if (amenity === 'hospital' || amenity === 'clinic' || tags.healthcare || amenity === 'doctors') return 'HOSPITAL';
+  if (amenity === 'fire_station' || emergency === 'fire_station' || emergency === 'yes') return 'FIRE_STATION';
+  if (amenity === 'hospital' || amenity === 'clinic' || healthcare === 'hospital' || healthcare === 'clinic' || healthcare === 'centre' || amenity === 'doctors') return 'HOSPITAL';
   if (amenity === 'pharmacy' || amenity === 'chemist') return 'PHARMACY_24_7';
-  if (railway || highway === 'bus_stop' || amenity === 'bus_station' || amenity === 'ferry_terminal') return 'TRANSIT_HUB';
+  if (railway || highway === 'bus_stop' || highway === 'platform' || amenity === 'bus_station' || amenity === 'ferry_terminal') return 'TRANSIT_HUB';
 
   return 'OPEN_COMMERCIAL';
 }
@@ -289,12 +290,16 @@ function getCategoryDefaultName(tags?: Record<string, string>): string {
   }
 }
 
-// OVERPASS API MIRRORS FOR MAXIMUM RELIABILITY
+// RELIABLE OVERPASS API MIRRORS POOL (ORDERED BY SPEED & RELIABILITY)
 const OVERPASS_SERVERS = [
+  'https://overpass.freemap.sk/api/interpreter',
+  'https://overpass.osm.ch/api/interpreter',
   'https://overpass-api.de/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
+  'https://z.overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
 
 // REAL BACKEND PROXY FOR OVERPASS NEARBY PLACES WITH MIRROR POOL & SAFE RESPONSE PARSING
@@ -314,16 +319,17 @@ safetyApiRouter.get('/nearby-places', async (req, res) => {
     if (isNaN(radius) || radius < 500) radius = 500;
     if (radius > 10000) radius = 10000;
 
-    // Single-line clean Overpass QL query
-    const overpassQuery = `[out:json][timeout:15];(node["amenity"~"police|fire_station|hospital|clinic|pharmacy|doctors|bus_station|bank|post_office"](around:${radius},${lat},${lng});way["amenity"~"police|fire_station|hospital|clinic|pharmacy|doctors|bus_station|bank|post_office"](around:${radius},${lat},${lng});node["railway"~"station|subway_entrance"](around:${radius},${lat},${lng});way["railway"~"station|subway_entrance"](around:${radius},${lat},${lng});node["highway"~"bus_stop"](around:${radius},${lat},${lng});node["emergency"](around:${radius},${lat},${lng}););out center 35;`.trim();
+    // Fast, optimized Overpass QL query searching node/way/relation
+    const overpassQuery = `[out:json][timeout:10];(nwr["amenity"~"police|fire_station|hospital|clinic|pharmacy|chemist|doctors|bus_station|bank|post_office"](around:${radius},${lat},${lng});nwr["railway"~"station|subway_entrance|halt|tram_stop"](around:${radius},${lat},${lng});nwr["highway"~"bus_stop|platform"](around:${radius},${lat},${lng});nwr["emergency"](around:${radius},${lat},${lng});nwr["healthcare"](around:${radius},${lat},${lng}););out center 40;`.trim();
 
     let elements: any[] = [];
     let fetchSuccess = false;
+    let successfulServer = '';
     let lastErrorDetails = 'All Overpass mirrors failed or timed out';
 
     for (const serverUrl of OVERPASS_SERVERS) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 7000);
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
 
       try {
         const overpassRes = await fetch(serverUrl, {
@@ -340,13 +346,13 @@ safetyApiRouter.get('/nearby-places', async (req, res) => {
         const rawText = await overpassRes.text();
 
         if (!overpassRes.ok) {
-          console.warn(`[Overpass Proxy] ${serverUrl} returned HTTP ${overpassRes.status}. Snippet: ${rawText.substring(0, 150)}`);
+          console.warn(`[Overpass Proxy] ${serverUrl} returned HTTP ${overpassRes.status}. Snippet: ${rawText.substring(0, 100)}`);
           lastErrorDetails = `${serverUrl} HTTP ${overpassRes.status}`;
           continue;
         }
 
         if (!rawText.trim().startsWith('{')) {
-          console.warn(`[Overpass Proxy] ${serverUrl} returned non-JSON body. Snippet: ${rawText.substring(0, 150)}`);
+          console.warn(`[Overpass Proxy] ${serverUrl} returned non-JSON body. Snippet: ${rawText.substring(0, 100)}`);
           lastErrorDetails = `${serverUrl} returned non-JSON content`;
           continue;
         }
@@ -354,10 +360,11 @@ safetyApiRouter.get('/nearby-places', async (req, res) => {
         const data = JSON.parse(rawText);
         elements = data?.elements || [];
         fetchSuccess = true;
+        successfulServer = serverUrl;
         break;
       } catch (err: any) {
         clearTimeout(timeoutId);
-        console.warn(`[Overpass Proxy] ${serverUrl} failed: ${err.name === 'AbortError' ? 'Timeout' : err.message}`);
+        console.warn(`[Overpass Proxy] ${serverUrl} failed: ${err.name === 'AbortError' ? 'Timeout (4s)' : err.message}`);
         lastErrorDetails = `${serverUrl} ${err.name === 'AbortError' ? 'Timeout' : err.message}`;
       }
     }
@@ -381,15 +388,15 @@ safetyApiRouter.get('/nearby-places', async (req, res) => {
         const walkTime = Math.max(1, Math.round(distMeters / 75));
         const havenType = mapOsmTagToType(tags);
 
-        const street = tags['addr:street'] || '';
+        const street = tags['addr:street'] || tags['addr:full'] || '';
         const houseNum = tags['addr:housenumber'] || '';
-        const city = tags['addr:city'] || '';
-        const address = [houseNum, street, city].filter(Boolean).join(' ') || `${itemLat.toFixed(4)}°, ${itemLon.toFixed(4)}°`;
+        const city = tags['addr:city'] || tags['addr:district'] || tags['addr:block'] || '';
+        const address = [houseNum, street, city].filter(Boolean).join(', ') || `${itemLat.toFixed(4)}°, ${itemLon.toFixed(4)}°`;
         const openingHoursStr = tags.opening_hours || '';
         const isOpen247 = Boolean(openingHoursStr.includes('24/7')) || havenType === 'POLICE_STATION' || havenType === 'FIRE_STATION' || havenType === 'HOSPITAL';
 
         return {
-          id: `osm_${item.id || idx}`,
+          id: `osm_${item.type || 'node'}_${item.id || idx}`,
           name,
           type: havenType,
           distance_meters: distMeters,
@@ -409,8 +416,9 @@ safetyApiRouter.get('/nearby-places', async (req, res) => {
 
     res.json({
       success: true,
+      provider: successfulServer,
       count: realPlaces.length,
-      places: realPlaces.slice(0, 20),
+      places: realPlaces.slice(0, 30),
     });
   } catch (err: any) {
     console.error('Overpass Proxy fatal error:', err);
