@@ -201,15 +201,13 @@ export const ReportIncidentModal: React.FC = () => {
         };
       }
 
-      // Persist directly to Firestore
+      // Persist directly to Firestore (Firestore onSnapshot will automatically update state)
       await submitIncidentToFirestore(reportDataToStore);
 
       setSubmitFeedback({
         success: true,
         message: 'Report submitted and saved live to Firestore!',
       });
-
-      addIncident(reportDataToStore);
 
       setTimeout(() => {
         closeReportModal();

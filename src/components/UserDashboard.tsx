@@ -45,9 +45,45 @@ export const UserDashboard: React.FC<{
     const [source, setSource] = useState('Detecting location...');
     const [isOriginEdited, setIsOriginEdited] = useState(false);
     const [originError, setOriginError] = useState<string | null>(null);
+    const [isGpsLoading, setIsGpsLoading] = useState(false);
 
     const [destination, setDestination] = useState('');
     const [isPlanning, setIsPlanning] = useState(false);
+
+    // Explicit handleUseGpsLocation function for button click
+    const handleUseGpsLocation = async () => {
+        setIsGpsLoading(true);
+        setOriginError(null);
+        if (!navigator.geolocation) {
+            setOriginError('Geolocation is not supported by your browser.');
+            setIsGpsLoading(false);
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+                const { latitude, longitude } = pos.coords;
+                setIsOriginEdited(false);
+                try {
+                    const address = await reverseGeocode(latitude, longitude);
+                    setSource(address ? (address.split(',')[0] || address) : `Current GPS (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+                } catch {
+                    setSource(`Current GPS (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+                } finally {
+                    setIsGpsLoading(false);
+                }
+            },
+            (err) => {
+                let msg = 'Unable to retrieve location.';
+                if (err.code === err.PERMISSION_DENIED) msg = 'Location permission denied by user.';
+                else if (err.code === err.TIMEOUT) msg = 'Location request timed out.';
+                else if (err.code === err.POSITION_UNAVAILABLE) msg = 'Location information unavailable.';
+                setOriginError(msg);
+                setIsGpsLoading(false);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    };
 
     // Auto-enable browser GPS on load if currently simulated
     useEffect(() => {
@@ -360,22 +396,15 @@ export const UserDashboard: React.FC<{
                                 <div className="relative">
                                     <div className="flex items-center justify-between mb-1.5">
                                         <label className="text-[10px] font-bold text-gray-400 uppercase block">Origin Location</label>
-                                        {isOriginEdited && (
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setIsOriginEdited(false);
-                                                    setOriginError(null);
-                                                    const { lat, lng } = navigation.currentPosition;
-                                                    reverseGeocode(lat, lng).then((addr) => {
-                                                        setSource(addr ? addr.split(',')[0] : `Current Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
-                                                    });
-                                                }}
-                                                className="text-[10px] text-cyan-500 hover:underline font-semibold cursor-pointer"
-                                            >
-                                                Use GPS Location
-                                            </button>
-                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={handleUseGpsLocation}
+                                            disabled={isGpsLoading}
+                                            className="text-[10px] text-cyan-500 hover:underline font-semibold cursor-pointer flex items-center gap-1"
+                                        >
+                                            <Locate className={`w-3 h-3 ${isGpsLoading ? 'animate-spin' : ''}`} />
+                                            <span>{isGpsLoading ? 'Locating...' : 'Use GPS Location'}</span>
+                                        </button>
                                     </div>
                                     <div className="relative">
                                         <MapPin className="absolute left-3.5 top-3.5 w-4.5 h-4.5 text-gray-400" />

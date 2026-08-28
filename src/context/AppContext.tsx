@@ -39,6 +39,7 @@ import {
 } from '../services/safetyAiService';
 import { GeocodedLocation } from '../services/geocodingService';
 import { RealRoute, fetchRealRoutes } from '../services/routingService';
+import { fetchRealNearbyPlaces } from '../services/nearbyPlacesService';
 
 
 export interface EmergencyContactInfo {
@@ -592,33 +593,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return calculatedRoutes as unknown as RouteScoreDetails[];
   }, [destinationLocation, calculatedRoutes]);
 
-  // Recalculate distance to havens
+  // Fetch real nearby POIs when user GPS position changes
   useEffect(() => {
-    const userPos = navigation.currentPosition;
-    setSafeHavens((prev) =>
-      prev.map((haven, idx) => {
-        const havenCoords = [
-          { x: 260, y: 280 },
-          { x: 340, y: 120 },
-          { x: 560, y: 380 },
-          { x: 640, y: 260 },
-          { x: 210, y: 340 },
-        ][idx] || { x: 400, y: 200 };
-
-        const dx = (havenCoords.x - userPos.x) * 1.5;
-        const dy = (havenCoords.y - userPos.y) * 1.5;
-        const distMeters = Math.max(30, Math.round(Math.sqrt(dx * dx + dy * dy)));
-        const walkMin = Math.max(1, Math.round(distMeters / 75));
-
-        return {
-          ...haven,
-          distance_meters: distMeters,
-          walk_time_minutes: walkMin,
-          coordinates: havenCoords,
-        };
-      })
-    );
-  }, [navigation.currentPosition]);
+    let isMounted = true;
+    const { lat, lng } = navigation.currentPosition;
+    fetchRealNearbyPlaces(lat, lng).then((places) => {
+      if (isMounted && places && places.length > 0) {
+        setSafeHavens(places);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [navigation.currentPosition.lat, navigation.currentPosition.lng]);
 
   // Refresh Pulse
   const refreshSafetyPulse = useCallback(async () => {
@@ -1253,13 +1240,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Navigate to Haven Action
   const navigateToHaven = useCallback((haven: SafeHavenCandidate) => {
+    const userLat = navigation.currentPosition.lat;
+    const userLng = navigation.currentPosition.lng;
+    const destLat = haven.latitude || 21.1538;
+    const destLng = haven.longitude || 79.0890;
+
     const waypoints = [
-      { x: navigation.currentPosition.x, y: navigation.currentPosition.y, lat: navigation.currentPosition.lat, lng: navigation.currentPosition.lng, text: 'Depart current location towards Haven Sanctuary' },
-      { x: haven.coordinates?.x || 260, y: haven.coordinates?.y || 280, lat: 37.7735, lng: -122.4190, text: `Arrive at ${haven.name}`, note: '24/7 Verified Partner Sanctuary' },
+      { x: navigation.currentPosition.x, y: navigation.currentPosition.y, lat: userLat, lng: userLng, text: `Depart current location towards ${haven.name}` },
+      { x: haven.coordinates?.x || 260, y: haven.coordinates?.y || 280, lat: destLat, lng: destLng, text: `Arrive at ${haven.name}`, note: '24/7 Verified Partner Sanctuary' },
     ];
 
     const distKm = +(haven.distance_meters / 1000).toFixed(2);
     setSelectedRouteId('haven_emergency_route');
+    setOriginLocation({
+      id: 'orig_gps_' + Date.now(),
+      name: 'Current Location',
+      displayAddress: `Lat: ${userLat.toFixed(5)}, Lng: ${userLng.toFixed(5)}`,
+      latitude: userLat,
+      longitude: userLng,
+    });
+    setDestinationLocation({
+      id: 'dest_haven_' + Date.now(),
+      name: haven.name,
+      displayAddress: haven.address || haven.name,
+      latitude: destLat,
+      longitude: destLng,
+    });
+
     setNavigation({
       isNavigating: true,
       travelMode: 'WALKING',
@@ -1273,8 +1280,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       destinationPosition: {
         x: haven.coordinates?.x || 260,
         y: haven.coordinates?.y || 280,
-        lat: 37.7735,
-        lng: -122.4190,
+        lat: destLat,
+        lng: destLng,
       },
       totalDistanceKm: distKm,
       totalEstTimeMin: haven.walk_time_minutes || 2,
@@ -1282,8 +1289,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       distanceRemainingKm: distKm,
       speedKmh: 5.2,
       isPaused: false,
-      isSimulatingWalk: true,
-      gpsMode: 'SIMULATED',
+      isSimulatingWalk: false,
+      gpsMode: 'REAL_BROWSER',
       steps: waypoints.map((wp) => ({
         text: wp.text,
         distanceMeters: haven.distance_meters,
@@ -1294,6 +1301,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       completedSummary: null,
       rerouteNotice: null,
     });
+    setActiveTab('map');
   }, [navigation.currentPosition]);
 
   // Apply suggested reroute
@@ -1317,7 +1325,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Incident Actions
   const addIncident = useCallback((newReport: any) => {
-    setIncidents((prev) => [newReport, ...prev]);
+    setIncidents((prev) => {
+      const exists = prev.some((i) => i.id === newReport.id);
+      if (exists) return prev;
+      return [newReport, ...prev];
+    });
     setActiveNotification({
       alert_title: `Recent Report: ${String(newReport.category).replace('_', ' ')}`,
       notification_text: newReport.description,

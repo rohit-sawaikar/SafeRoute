@@ -131,8 +131,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const isLight = theme === 'light';
 
   const completeAuth = (userProfile: UserAuthProfile) => {
-    setTempUserProfile(userProfile);
-    setShowContactOnboarding(true);
+    onLoginSuccess(userProfile);
+    onClose();
+    setShowContactOnboarding(false);
+    setTempUserProfile(null);
+    setSuccessMessage(null);
+    setOtpStep(false);
+    setReceivedDemoOtp(null);
+    navigate('/app');
   };
 
   const handleSaveContactAndFinish = (e: React.FormEvent) => {
@@ -161,6 +167,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSuccessMessage(null);
     setOtpStep(false);
     setReceivedDemoOtp(null);
+    navigate('/app');
   };
 
   const handleSendOtp = async (e: React.FormEvent) => {
@@ -633,33 +640,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </button>
             </div>
 
-            {/* Auth Method Navigation Tabs */}
+            {/* Auth Method Navigation Header */}
             {authMethod !== 'admin' && (
               <div
-                className={`mt-5 grid grid-cols-3 gap-1 rounded-xl p-1 border ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-zinc-900/90 border-zinc-800'
+                className={`mt-5 flex items-center justify-between rounded-xl p-1 border ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-zinc-900/90 border-zinc-800'
                   }`}
               >
                 <button
-                  onClick={() => {
-                    setAuthMethod('phone');
-                    setOtpStep(false);
-                  }}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${authMethod === 'phone'
-                    ? isLight
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'bg-zinc-800 text-white shadow-xs'
-                    : isLight
-                      ? 'text-slate-600 hover:text-slate-900'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                    }`}
-                >
-                  <Smartphone className="h-3.5 w-3.5 text-cyan-500" />
-                  <span>Phone</span>
-                </button>
-
-                <button
+                  type="button"
                   onClick={() => setAuthMethod('email')}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${authMethod === 'email'
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${authMethod === 'email'
                     ? isLight
                       ? 'bg-white text-slate-900 shadow-xs'
                       : 'bg-zinc-800 text-white shadow-xs'
@@ -668,23 +658,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       : 'text-zinc-400 hover:text-zinc-200'
                     }`}
                 >
-                  <Mail className="h-3.5 w-3.5 text-zinc-400" />
-                  <span>Email</span>
-                </button>
-
-                <button
-                  onClick={() => setAuthMethod('privacy')}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${authMethod === 'privacy'
-                    ? isLight
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'bg-zinc-800 text-white shadow-xs'
-                    : isLight
-                      ? 'text-slate-600 hover:text-slate-900'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                    }`}
-                >
-                  <Ghost className="h-3.5 w-3.5 text-amber-500" />
-                  <span>Private</span>
+                  <Mail className="h-3.5 w-3.5 text-cyan-500" />
+                  <span>Email & Password</span>
                 </button>
               </div>
             )}

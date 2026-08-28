@@ -392,6 +392,8 @@ export interface SafeHavenCandidate {
   walk_time_minutes: number;
   address: string;
   phone?: string;
+  latitude?: number;
+  longitude?: number;
   coordinates?: { x: number; y: number; lat: number; lng: number };
 }
 

@@ -103,7 +103,7 @@ export const LiveShare: React.FC = () => {
           </div>
           <div>
             <h1 className="font-bold text-base text-white tracking-wide flex items-center gap-2">
-              Safe Haven <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono">Live Tracking</span>
+              Safe Route <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono">Live Tracking</span>
             </h1>
             <p className="text-xs text-zinc-400">Public Live Location Broadcast</p>
           </div>
@@ -165,7 +165,7 @@ export const LiveShare: React.FC = () => {
 
       {/* Footer */}
       <footer className="border-t border-zinc-800 py-4 px-6 text-center text-xs text-zinc-500">
-        Safe Haven &copy; {new Date().getFullYear()} — Public Emergency Live Location Sharing
+        Safe Route &copy; {new Date().getFullYear()} — Public Emergency Live Location Sharing
       </footer>
     </div>
   );
