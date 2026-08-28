@@ -23,6 +23,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { updateIncidentInFirestore } from '../services/firebaseClient';
 
 interface IncidentReportAdmin {
   id: string;
@@ -98,16 +99,33 @@ export const AdminModerationPortal: React.FC<{ isOpen: boolean; onClose: () => v
 
   const handleModerateAction = async (id: string, action: 'APPROVE' | 'REJECT' | 'FLAG' | 'EXPIRE') => {
     try {
-      const res = await fetch(`/api/safety/admin/incidents/${id}/moderate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, notes: `Admin action: ${action}` }),
-      });
-      if (res.ok) {
-        setActionSuccess(`Incident ${id} updated with status ${action}.`);
-        fetchAdminData();
-        setTimeout(() => setActionSuccess(null), 3000);
+      // Express backend update if endpoint exists
+      try {
+        await fetch(`/api/safety/admin/incidents/${id}/moderate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, notes: `Admin action: ${action}` }),
+        });
+      } catch (e) {
+        // Express backend notice
       }
+
+      // Direct Firestore sync update
+      const statusMap: Record<string, string> = {
+        APPROVE: 'PUBLISHED',
+        REJECT: 'REJECTED',
+        FLAG: 'FLAGGED',
+        EXPIRE: 'EXPIRED',
+      };
+      const newStatus = statusMap[action] || action;
+      await updateIncidentInFirestore(id, {
+        status: newStatus,
+        isResolved: action === 'REJECT' || action === 'EXPIRE',
+      });
+
+      setActionSuccess(`Incident ${id} updated to ${newStatus} in Firestore.`);
+      fetchAdminData();
+      setTimeout(() => setActionSuccess(null), 3000);
     } catch (err) {
       console.error('Moderation failed:', err);
     }

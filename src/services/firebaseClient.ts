@@ -13,6 +13,10 @@ import {
   onSnapshot,
   query,
   where,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  orderBy,
   Unsubscribe,
 } from 'firebase/firestore';
 import {
@@ -94,6 +98,64 @@ export function subscribeToNearbyIncidents(
     },
     onError
   );
+}
+
+/**
+ * Real-time Subscription to ALL Community Incident Reports in Firestore
+ */
+export function subscribeToAllIncidents(
+  onUpdate: (reports: any[]) => void,
+  onError?: (error: any) => void
+): Unsubscribe {
+  const reportsRef = collection(db, 'incidentReports');
+  return onSnapshot(
+    reportsRef,
+    (snapshot) => {
+      const reports: any[] = [];
+      snapshot.forEach((d) => {
+        reports.push({ id: d.id, ...d.data() });
+      });
+      onUpdate(reports);
+    },
+    (err) => {
+      console.warn('Firestore incident reports subscription notice:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Submit / Persist a new Incident Report directly to Firestore
+ */
+export async function submitIncidentToFirestore(incidentData: any): Promise<void> {
+  const docId = incidentData.id || `inc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const docRef = doc(db, 'incidentReports', docId);
+  const payload = {
+    ...incidentData,
+    id: docId,
+    source: 'community',
+    updatedAt: Date.now(),
+  };
+  await setDoc(docRef, payload);
+}
+
+/**
+ * Update an existing Incident Report in Firestore (e.g. Admin Moderation / Resolution)
+ */
+export async function updateIncidentInFirestore(incidentId: string, updates: Record<string, any>): Promise<void> {
+  const docRef = doc(db, 'incidentReports', incidentId);
+  await updateDoc(docRef, {
+    ...updates,
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * Delete an Incident Report from Firestore
+ */
+export async function deleteIncidentFromFirestore(incidentId: string): Promise<void> {
+  const docRef = doc(db, 'incidentReports', incidentId);
+  await deleteDoc(docRef);
 }
 
 /**

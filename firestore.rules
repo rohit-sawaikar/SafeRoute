@@ -3,48 +3,38 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
-    // USERS COLLECTION
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isOwner(userId);
-      allow delete: if isOwner(userId);
-    }
-
-    // TRUSTED CONTACTS COLLECTION
-    match /trustedContacts/{contactId} {
-      allow read: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid || 
-        resource.data.contactUserId == request.auth.uid ||
-        resource.data.contactPhone == request.auth.token.phone_number
-      );
-      allow create, update, delete: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid || 
-        request.resource.data.userId == request.auth.uid
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        request.auth.token.email == "adminsafeheaven09@gmail.com"
       );
     }
 
     // INCIDENT REPORTS COLLECTION
     match /incidentReports/{reportId} {
-      // Public / authenticated users can read incident reports,
-      // but sensitive category reporter identities are protected on backend
+      // Public & authenticated users can read community incident reports
       allow read: if true;
       
-      // Authenticated users can submit reports
-      allow create: if isAuthenticated() && request.resource.data.reporterId == request.auth.uid;
+      // Community users can create incident reports with valid payload structure
+      allow create: if request.resource.data.category is string
+                    && request.resource.data.description is string
+                    && request.resource.data.description.size() > 0
+                    && request.resource.data.description.size() <= 2000
+                    && request.resource.data.severity is string;
       
-      // Users can update their own report description or status; system functions handle corroboration count updates
-      allow update: if isAuthenticated() && resource.data.reporterId == request.auth.uid;
+      // Updates: Authorized admins can moderate status/deletion; community users can update votes without tampering core details
+      allow update: if isAdmin() || (
+        request.resource.data.category == resource.data.category &&
+        request.resource.data.description == resource.data.description &&
+        request.resource.data.location == resource.data.location
+      );
       
-      allow delete: if false; // Reports should be expired, not deleted by users
+      // Only authenticated admin users can delete incident reports
+      allow delete: if isAdmin();
     }
 
     // SAFETY ZONES COLLECTION (Computed system aggregate data)

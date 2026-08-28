@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { updateIncidentInFirestore, deleteIncidentFromFirestore } from '../services/firebaseClient';
 import {
   Shield,
   ShieldAlert,
@@ -62,8 +63,16 @@ export const AdminDashboard: React.FC = () => {
     );
   };
 
-  const handleDeactivateReport = (id: string) => {
+  const handleDeactivateReport = async (id: string) => {
     resolveIncident(id);
+    try {
+      await updateIncidentInFirestore(id, {
+        isResolved: true,
+        status: 'RESOLVED',
+      });
+    } catch (err) {
+      console.warn('Firestore incident resolution notice:', err);
+    }
   };
 
   // Filtered incidents

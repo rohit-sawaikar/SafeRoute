@@ -4,7 +4,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { auth } from '../services/firebaseClient';
+import { auth, subscribeToAllIncidents } from '../services/firebaseClient';
 import { onAuthStateChanged } from 'firebase/auth';
 import type {
   TravelMode,
@@ -479,8 +479,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       resolvedVotes: 0,
       disputes: 0,
       status: 'PUBLISHED',
+      source: 'demo',
     }))
   );
+
+  // Real-time Firestore subscription for community incidents
+  useEffect(() => {
+    const unsub = subscribeToAllIncidents(
+      (firestoreIncidents) => {
+        if (!firestoreIncidents) return;
+
+        const formattedFirestore: CommunityIncident[] = firestoreIncidents.map((inc: any) => ({
+          id: inc.id,
+          category: inc.category || 'GENERAL_SAFETY',
+          title: inc.title || `${String(inc.category || 'INCIDENT').replace(/_/g, ' ')} Reported`,
+          description: inc.description || '',
+          severity: inc.severity || 'MEDIUM',
+          reportedAt: inc.reportedAt || new Date().toISOString(),
+          minutesAgo: inc.minutesAgo !== undefined ? inc.minutesAgo : Math.max(0, Math.floor((Date.now() - (inc.createdAt || Date.now())) / 60000)),
+          confidence: inc.confidence !== undefined ? inc.confidence : 0.85,
+          corroborations: inc.corroborations || 1,
+          hasPhoto: Boolean(inc.hasPhoto || (inc.photos && inc.photos.length > 0)),
+          location: inc.location || { lat: 37.7749, lng: -122.4194, name: inc.address || 'Reported Location', x: 400, y: 250 },
+          reporterToken: inc.reporterToken || 'anon_user',
+          isResolved: Boolean(inc.isResolved || inc.status === 'RESOLVED' || inc.status === 'EXPIRED' || inc.status === 'REJECTED'),
+          resolvedVotes: inc.resolvedVotes || 0,
+          disputes: inc.disputes || 0,
+          status: inc.status || 'PUBLISHED',
+          source: 'community',
+        }));
+
+        setIncidents((prev) => {
+          // Preserve demo/mock incidents
+          const demoIncidents = prev.filter((i) => i.source === 'demo');
+          const demoIds = new Set(demoIncidents.map((d) => d.id));
+          const cleanCommunity = formattedFirestore.filter((f) => !demoIds.has(f.id));
+          return [...cleanCommunity, ...demoIncidents];
+        });
+      },
+      (err) => {
+        console.warn('Firestore subscription notice (using local state fallback):', err);
+      }
+    );
+
+    return () => unsub();
+  }, []);
 
   // Safe Havens
   const [safeHavens, setSafeHavens] = useState<SafeHavenCandidate[]>(MOCK_SAFE_HAVENS);
