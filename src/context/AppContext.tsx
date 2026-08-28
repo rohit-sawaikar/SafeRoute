@@ -286,26 +286,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   }, []);
 
-  // User Authentication States
-  const [currentUser, setCurrentUser] = useState<UserAuthProfile | null>(() => {
-    try {
-      const saved = localStorage.getItem('safeheaven_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
-
+  // User Authentication States (Derived strictly from Firebase Authentication)
+  const [currentUser, setCurrentUser] = useState<UserAuthProfile | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    const isMock = !(import.meta as any).env.VITE_FIREBASE_API_KEY || (import.meta as any).env.VITE_FIREBASE_API_KEY === 'AIzaSy_MOCK_KEY_FOR_DEMO';
-
-    if (isMock) {
-      setIsAuthLoading(false);
-      return;
-    }
-
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setIsAuthLoading(true);
       if (firebaseUser) {
@@ -344,18 +329,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return () => unsubscribe();
   }, []);
-
-  useEffect(() => {
-    try {
-      if (currentUser) {
-        localStorage.setItem('safeheaven_user', JSON.stringify(currentUser));
-      } else {
-        localStorage.removeItem('safeheaven_user');
-      }
-    } catch (e) {
-      console.warn('LocalStorage auth sync error:', e);
-    }
-  }, [currentUser]);
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const openAuthModal = useCallback(() => setIsAuthModalOpen(true), []);

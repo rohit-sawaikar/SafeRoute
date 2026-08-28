@@ -32,6 +32,8 @@ import { auth } from '../services/firebaseClient';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from 'firebase/auth';
 
 export interface UserAuthProfile {
@@ -81,17 +83,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const [authMethod, setAuthMethod] = useState<'phone' | 'email' | 'privacy' | 'admin'>('email');
 
-  const getMockUsers = (): Record<string, string> => {
-    const raw = localStorage.getItem('saferoute_mock_users');
-    return raw ? JSON.parse(raw) : {
-      'priya.sharma@saferoute.demo': 'password',
-    };
-  };
-
-  const saveMockUser = (emailStr: string, passStr: string) => {
-    const users = getMockUsers();
-    users[emailStr.toLowerCase()] = passStr;
-    localStorage.setItem('saferoute_mock_users', JSON.stringify(users));
+  const isValidEmail = (emailStr: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(emailStr.trim());
   };
   const [phoneCountry, setPhoneCountry] = useState('+91');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -261,97 +255,81 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const isMock = !(import.meta as any).env.VITE_FIREBASE_API_KEY || (import.meta as any).env.VITE_FIREBASE_API_KEY === 'AIzaSy_MOCK_KEY_FOR_DEMO';
+    const trimmedEmail = email.trim();
+    if (!isValidEmail(trimmedEmail)) {
+      setErrorMessage('Please enter a valid email address (e.g. name@example.com).');
+      return;
+    }
 
-    if (isMock) {
-      const normalizedEmail = email.trim().toLowerCase();
-      const mockUsers = getMockUsers();
+    if (!password || password.length < 6) {
+      setErrorMessage('Password must be at least 6 characters long.');
+      return;
+    }
 
+    try {
       if (isSignUp) {
-        saveMockUser(normalizedEmail, password);
+        if (!displayName || displayName.trim().length < 2) {
+          setErrorMessage('Please enter your full name for account creation.');
+          return;
+        }
+
+        const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+        const user = userCredential.user;
+        const idTokenResult = await user.getIdTokenResult(true);
+        const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+        const isAdmin = !!idTokenResult.claims.admin || (adminEmail ? user.email?.toLowerCase() === adminEmail : false);
+
         const userProfile: UserAuthProfile = {
-          uid: `usr_email_${Date.now()}`,
-          displayName: displayName || 'SafeRoute User',
-          email: normalizedEmail,
+          uid: user.uid,
+          displayName: displayName.trim(),
+          email: user.email || trimmedEmail,
           homeCountryCode: 'IN',
           isDiscreetMode: isDiscreetEnabled,
-          createdAt: Date.now(),
-          admin: false,
+          createdAt: user.metadata.creationTime ? new Date(user.metadata.creationTime).getTime() : Date.now(),
+          admin: isAdmin,
         };
+
         setSuccessMessage('Account created successfully!');
         setTimeout(() => {
           completeAuth(userProfile);
         }, 700);
       } else {
-        if (!mockUsers[normalizedEmail]) {
-          alert('Account not found. Please sign up.');
-          setErrorMessage('Account not found. Please sign up.');
-          return;
-        }
-        if (mockUsers[normalizedEmail] !== password) {
-          setErrorMessage('Invalid password.');
-          return;
-        }
-
+        const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+        const user = userCredential.user;
+        const idTokenResult = await user.getIdTokenResult(true);
         const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
-        const isTargetAdmin = adminEmail ? normalizedEmail === adminEmail : false;
+        const isAdmin = !!idTokenResult.claims.admin || (adminEmail ? user.email?.toLowerCase() === adminEmail : false);
+
         const userProfile: UserAuthProfile = {
-          uid: isTargetAdmin ? 'usr_admin' : `usr_email_${Date.now()}`,
-          displayName: isTargetAdmin ? 'Admin' : (normalizedEmail.split('@')[0]),
-          email: normalizedEmail,
+          uid: user.uid,
+          displayName: user.displayName || displayName || user.email?.split('@')[0] || 'SafeRoute User',
+          email: user.email || trimmedEmail,
           homeCountryCode: 'IN',
           isDiscreetMode: isDiscreetEnabled,
-          createdAt: Date.now(),
-          admin: isTargetAdmin,
+          createdAt: user.metadata.creationTime ? new Date(user.metadata.creationTime).getTime() : Date.now(),
+          admin: isAdmin,
         };
+
         setSuccessMessage('Logged in successfully!');
         setTimeout(() => {
           completeAuth(userProfile);
         }, 700);
       }
-    } else {
-      try {
-        if (isSignUp) {
-          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          const userProfile: UserAuthProfile = {
-            uid: userCredential.user.uid,
-            displayName: displayName || 'SafeRoute User',
-            email: userCredential.user.email || undefined,
-            homeCountryCode: 'IN',
-            isDiscreetMode: isDiscreetEnabled,
-            createdAt: Date.now(),
-            admin: false,
-          };
-          setSuccessMessage('Account created successfully!');
-          setTimeout(() => {
-            completeAuth(userProfile);
-          }, 700);
-        } else {
-          const userCredential = await signInWithEmailAndPassword(auth, email, password);
-          const idTokenResult = await userCredential.user.getIdTokenResult(true);
-          const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
-          const isAdmin = !!idTokenResult.claims.admin || (adminEmail ? userCredential.user.email?.toLowerCase() === adminEmail : false);
-          const userProfile: UserAuthProfile = {
-            uid: userCredential.user.uid,
-            displayName: userCredential.user.displayName || 'SafeRoute User',
-            email: userCredential.user.email || undefined,
-            homeCountryCode: 'IN',
-            isDiscreetMode: isDiscreetEnabled,
-            createdAt: userCredential.user.metadata.creationTime ? new Date(userCredential.user.metadata.creationTime).getTime() : Date.now(),
-            admin: isAdmin,
-          };
-          setSuccessMessage('Logged in successfully!');
-          setTimeout(() => {
-            completeAuth(userProfile);
-          }, 700);
-        }
-      } catch (err: any) {
-        if (err.code === 'auth/user-not-found' || err.message?.includes('user-not-found') || err.code === 'auth/invalid-credential') {
-          alert('Account not found. Please sign up.');
-          setErrorMessage('Account not found. Please sign up.');
-        } else {
-          setErrorMessage(err.message || 'Authentication failed. Please check credentials.');
-        }
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        setErrorMessage('Account not found or invalid credentials. Please check your email and password or sign up.');
+      } else if (err.code === 'auth/wrong-password') {
+        setErrorMessage('Incorrect password. Please try again.');
+      } else if (err.code === 'auth/email-already-in-use') {
+        setErrorMessage('An account already exists with this email address. Please sign in instead.');
+      } else if (err.code === 'auth/invalid-email') {
+        setErrorMessage('Invalid email format.');
+      } else if (err.code === 'auth/weak-password') {
+        setErrorMessage('Password should be at least 6 characters long.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setErrorMessage('Too many failed attempts. Please try again later.');
+      } else {
+        setErrorMessage(err.message || 'Authentication failed. Please check credentials.');
       }
     }
   };
@@ -361,23 +339,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const isMock = !(import.meta as any).env.VITE_FIREBASE_API_KEY || (import.meta as any).env.VITE_FIREBASE_API_KEY === 'AIzaSy_MOCK_KEY_FOR_DEMO';
+    const trimmedEmail = email.trim();
+    if (!isValidEmail(trimmedEmail)) {
+      setErrorMessage('Please enter a valid administrator email address.');
+      return;
+    }
+
+    if (!password) {
+      setErrorMessage('Please enter your administrator password.');
+      return;
+    }
+
     const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
 
-    if (isMock) {
-      const mockUsers = getMockUsers();
-      const normalizedEmail = email.trim().toLowerCase();
-      const isConfiguredAdmin = adminEmail ? normalizedEmail === adminEmail : true;
-      const isValidPassword = mockUsers[normalizedEmail] === password || password.length >= 6;
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+      const user = userCredential.user;
+      const idTokenResult = await user.getIdTokenResult(true);
+      const isAdmin = !!idTokenResult.claims.admin || (adminEmail ? user.email?.toLowerCase() === adminEmail : false);
 
-      if (isConfiguredAdmin && isValidPassword) {
+      if (isAdmin) {
         const userProfile: UserAuthProfile = {
-          uid: 'usr_admin',
-          displayName: 'Admin User',
-          email: normalizedEmail,
+          uid: user.uid,
+          displayName: user.displayName || 'Admin',
+          email: user.email || trimmedEmail,
           homeCountryCode: 'IN',
           isDiscreetMode: false,
-          createdAt: Date.now(),
+          createdAt: user.metadata.creationTime ? new Date(user.metadata.creationTime).getTime() : Date.now(),
           admin: true,
         };
         setSuccessMessage('Admin verified! Welcome, Admin.');
@@ -387,50 +375,54 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           navigate('/admin');
         }, 700);
       } else {
-        setErrorMessage('Invalid administrator credentials.');
+        await auth.signOut();
+        setErrorMessage('Access Denied: Authenticated account does not have ADMIN privileges.');
       }
-    } else {
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const idTokenResult = await userCredential.user.getIdTokenResult(true);
-        const isAdmin = !!idTokenResult.claims.admin || (adminEmail ? userCredential.user.email?.toLowerCase() === adminEmail : false);
-
-        if (isAdmin) {
-          const userProfile: UserAuthProfile = {
-            uid: userCredential.user.uid,
-            displayName: userCredential.user.displayName || 'Admin',
-            email: userCredential.user.email || undefined,
-            homeCountryCode: 'IN',
-            isDiscreetMode: false,
-            createdAt: userCredential.user.metadata.creationTime ? new Date(userCredential.user.metadata.creationTime).getTime() : Date.now(),
-            admin: true,
-          };
-          setSuccessMessage('Admin verified! Welcome, Admin.');
-          setTimeout(() => {
-            onLoginSuccess(userProfile);
-            onClose();
-            navigate('/admin');
-          }, 700);
-        } else {
-          await auth.signOut();
-          setErrorMessage('Access Denied: Account does not have ADMIN privileges.');
-        }
-      } catch (err: any) {
-        setErrorMessage(err.message || 'Authentication failed.');
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        setErrorMessage('Invalid administrator credentials.');
+      } else if (err.code === 'auth/wrong-password') {
+        setErrorMessage('Incorrect password for administrator account.');
+      } else {
+        setErrorMessage(err.message || 'Administrator authentication failed.');
       }
     }
   };
 
-  const handleGoogleSignIn = () => {
-    const userProfile: UserAuthProfile = {
-      uid: `usr_google_${Date.now()}`,
-      displayName: 'Priya Sharma',
-      email: 'priya.sharma@gmail.com',
-      homeCountryCode: 'IN',
-      isDiscreetMode: isDiscreetEnabled,
-      createdAt: Date.now(),
-    };
-    completeAuth(userProfile);
+  const handleGoogleSignIn = async () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      const idTokenResult = await user.getIdTokenResult(true);
+      const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+      const isAdmin = !!idTokenResult.claims.admin || (adminEmail ? user.email?.toLowerCase() === adminEmail : false);
+
+      const userProfile: UserAuthProfile = {
+        uid: user.uid,
+        displayName: user.displayName || user.email?.split('@')[0] || 'SafeRoute User',
+        email: user.email || undefined,
+        phone: user.phoneNumber || undefined,
+        homeCountryCode: 'IN',
+        isDiscreetMode: isDiscreetEnabled,
+        createdAt: user.metadata.creationTime ? new Date(user.metadata.creationTime).getTime() : Date.now(),
+        admin: isAdmin,
+      };
+
+      setSuccessMessage(`Google sign-in verified! Welcome, ${userProfile.displayName}.`);
+      setTimeout(() => {
+        completeAuth(userProfile);
+      }, 700);
+    } catch (err: any) {
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        setErrorMessage('Google sign-in popup was closed before completion.');
+      } else {
+        setErrorMessage(err.message || 'Google sign-in failed. Please try again.');
+      }
+    }
   };
 
   const handleQuickDemoLoad = () => {
@@ -510,7 +502,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 Go to Main App Portal
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
+                  try {
+                    await auth.signOut();
+                  } catch (e) {
+                    console.warn('Sign out error:', e);
+                  }
                   setCurrentUser(null);
                   onClose();
                   navigate('/');
