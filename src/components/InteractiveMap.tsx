@@ -195,13 +195,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
     L.control.zoom({ position: 'topright' }).addTo(map);
 
-    const tileUrl = isLight
-      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    const tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
     const tiles = L.tileLayer(tileUrl, {
       maxZoom: 19,
-      attribution: '&copy; OpenStreetMap &copy; CARTO',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
     tileLayerRef.current = tiles;
@@ -258,9 +256,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   // Update map tiles dynamically when theme toggles
   useEffect(() => {
     if (!mapInstanceRef.current || !tileLayerRef.current) return;
-    const tileUrl = isLight
-      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    const tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
     tileLayerRef.current.setUrl(tileUrl);
     setTimeout(() => {

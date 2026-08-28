@@ -34,6 +34,7 @@ export const FollowedModeHud: React.FC = () => {
     safeHavens,
     navigateToHaven,
     navigation,
+    emergencyContact,
   } = useApp();
 
   const [isRecording, setIsRecording] = useState(false);
@@ -69,7 +70,14 @@ export const FollowedModeHud: React.FC = () => {
     has_well_lit_entrance: true,
   };
 
-  const shareableGpsLink = `https://saferoute.internal/live-share?lat=${navigation.currentPosition.lat}&lng=${navigation.currentPosition.lng}&t=${Date.now()}`;
+  const contactName = emergencyContact?.name || 'Alex';
+  const contactCode = emergencyContact?.countryCode || '';
+  const contactPhone = emergencyContact?.phone || '555-0199';
+  const displayPhone = contactCode ? `${contactCode} ${contactPhone}` : contactPhone;
+  const rawPhoneDigits = `${contactCode}${contactPhone}`.replace(/[^+\d]/g, '');
+  const telLink = `tel:${rawPhoneDigits || '5550199'}`;
+
+  const shareableGpsLink = `${window.location.origin}/live-share?lat=${navigation.currentPosition.lat}&lng=${navigation.currentPosition.lng}&t=${Date.now()}`;
   const emergencySmsText = `[SafeRoute Emergency Alert] I feel unsafe. My live tracking link: ${shareableGpsLink} - Heading towards ${topHaven.name}`;
 
   const handleCopyLink = () => {
@@ -168,14 +176,14 @@ export const FollowedModeHud: React.FC = () => {
 
           {/* Trusted Contact Call Link */}
           <a
-            href="tel:5550199"
+            href={telLink}
             className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold text-xs transition-all active:scale-98"
           >
             <div className="flex items-center gap-2.5">
               <Phone className="h-5 w-5 text-cyan-400" />
               <div className="text-left">
                 <div className="text-sm font-bold">Call Emergency Contact</div>
-                <div className="text-[10px] text-zinc-400 font-normal">Alex (Primary Contact: 555-0199)</div>
+                <div className="text-[10px] text-zinc-400 font-normal">{contactName} ({displayPhone})</div>
               </div>
             </div>
             <ChevronRight className="h-4 w-4 text-zinc-400" />

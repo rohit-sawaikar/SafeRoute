@@ -313,12 +313,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           const idTokenResult = await firebaseUser.getIdTokenResult(true);
           isAdmin = !!idTokenResult.claims.admin;
-          if (firebaseUser.email === 'erumallasathvika2677@gmail.com') {
+          const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+          if (adminEmail && firebaseUser.email?.toLowerCase() === adminEmail) {
             isAdmin = true;
           }
         } catch (e) {
           console.warn("Failed to retrieve ID token claims", e);
-          if (firebaseUser.email === 'erumallasathvika2677@gmail.com') {
+          const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+          if (adminEmail && firebaseUser.email?.toLowerCase() === adminEmail) {
             isAdmin = true;
           }
         }
@@ -874,6 +876,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(interval);
   }, [navigation.isNavigating, navigation.isPaused, navigation.isSimulatingWalk, navigation.activeRouteId, navigation.arrivalState]);
 
+  // Real GPS Position Tracking Loop
+  useEffect(() => {
+    if (!navigation.isNavigating || navigation.isPaused || navigation.isSimulatingWalk) return;
+    if (navigation.arrivalState === 'JUST_REACHED' || navigation.arrivalState === 'COMPLETED_SUMMARY') return;
+
+    if (!navigator.geolocation) {
+      setNavigation((prev) => ({ ...prev, gpsMode: 'UNAVAILABLE' }));
+      return;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        setNavigation((prev) => {
+          if (!prev.isNavigating || prev.isPaused || prev.isSimulatingWalk) return prev;
+
+          const destLat = prev.destinationPosition.lat;
+          const destLng = prev.destinationPosition.lng;
+
+          // Haversine distance formula in kilometers
+          const R = 6371;
+          const dLat = ((destLat - lat) * Math.PI) / 180;
+          const dLon = ((destLng - lng) * Math.PI) / 180;
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos((lat * Math.PI) / 180) *
+              Math.cos((destLat * Math.PI) / 180) *
+              Math.sin(dLon / 2) *
+              Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const remainingKm = +(R * c).toFixed(2);
+
+          const origDist = prev.totalDistanceKm || 1;
+          const progressFraction = Math.max(0, Math.min(1, (origDist - remainingKm) / origDist));
+          const progress = Math.round(progressFraction * 100);
+          const speedKmh = prev.travelMode === 'VEHICLE' ? 30 : 5;
+          const eta = Math.max(1, Math.ceil((remainingKm / speedKmh) * 60));
+
+          // Arrival threshold: 50 meters (0.05 km)
+          const isArrived = remainingKm <= 0.05;
+
+          return {
+            ...prev,
+            gpsMode: 'REAL_BROWSER',
+            currentPosition: {
+              ...prev.currentPosition,
+              lat,
+              lng,
+              headingDeg: pos.coords.heading || prev.currentPosition.headingDeg || 0,
+            },
+            distanceRemainingKm: isArrived ? 0 : remainingKm,
+            progressPercent: isArrived ? 100 : progress,
+            etaMinutes: isArrived ? 0 : eta,
+            arrivalState: isArrived ? 'JUST_REACHED' : 'NAVIGATING',
+          };
+        });
+      },
+      (err) => {
+        console.warn('Real GPS location unavailable:', err.message);
+        setNavigation((prev) => ({ ...prev, gpsMode: 'UNAVAILABLE' }));
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 3000 }
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [navigation.isNavigating, navigation.isPaused, navigation.isSimulatingWalk, navigation.arrivalState]);
+
   // Destination reached transition
   useEffect(() => {
     if (navigation.arrivalState === 'JUST_REACHED') {
@@ -1025,8 +1098,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       etaMinutes: estTimeMin,
       speedKmh: speed,
       isPaused: false,
-      isSimulatingWalk: true,
-      gpsMode: 'SIMULATED',
+      isSimulatingWalk: false,
+      gpsMode: 'REAL_BROWSER',
       steps: waypoints.map((wp, i) => ({
         text: wp.text,
         distanceMeters: i === 0 ? 0 : Math.round((distanceKm / waypoints.length) * 1000),

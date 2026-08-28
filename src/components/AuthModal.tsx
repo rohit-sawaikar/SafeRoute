@@ -85,7 +85,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const raw = localStorage.getItem('saferoute_mock_users');
     return raw ? JSON.parse(raw) : {
       'priya.sharma@saferoute.demo': 'password',
-      'erumallasathvika2677@gmail.com': 'sathvika2677'
     };
   };
 
@@ -294,10 +293,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           return;
         }
 
-        const isTargetAdmin = normalizedEmail === 'erumallasathvika2677@gmail.com';
+        const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+        const isTargetAdmin = adminEmail ? normalizedEmail === adminEmail : false;
         const userProfile: UserAuthProfile = {
-          uid: isTargetAdmin ? 'usr_admin_sathvika' : `usr_email_${Date.now()}`,
-          displayName: isTargetAdmin ? 'Admin Sathvika' : (normalizedEmail.split('@')[0]),
+          uid: isTargetAdmin ? 'usr_admin' : `usr_email_${Date.now()}`,
+          displayName: isTargetAdmin ? 'Admin' : (normalizedEmail.split('@')[0]),
           email: normalizedEmail,
           homeCountryCode: 'IN',
           isDiscreetMode: isDiscreetEnabled,
@@ -329,7 +329,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         } else {
           const userCredential = await signInWithEmailAndPassword(auth, email, password);
           const idTokenResult = await userCredential.user.getIdTokenResult(true);
-          const isAdmin = !!idTokenResult.claims.admin || userCredential.user.email === 'erumallasathvika2677@gmail.com';
+          const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+          const isAdmin = !!idTokenResult.claims.admin || (adminEmail ? userCredential.user.email?.toLowerCase() === adminEmail : false);
           const userProfile: UserAuthProfile = {
             uid: userCredential.user.uid,
             displayName: userCredential.user.displayName || 'SafeRoute User',
@@ -361,14 +362,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSuccessMessage(null);
 
     const isMock = !(import.meta as any).env.VITE_FIREBASE_API_KEY || (import.meta as any).env.VITE_FIREBASE_API_KEY === 'AIzaSy_MOCK_KEY_FOR_DEMO';
+    const adminEmail = ((import.meta as any).env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
 
     if (isMock) {
-      const isTargetAdmin = email.trim().toLowerCase() === 'erumallasathvika2677@gmail.com';
-      if (isTargetAdmin && password === 'sathvika2677') {
+      const mockUsers = getMockUsers();
+      const normalizedEmail = email.trim().toLowerCase();
+      const isConfiguredAdmin = adminEmail ? normalizedEmail === adminEmail : true;
+      const isValidPassword = mockUsers[normalizedEmail] === password || password.length >= 6;
+
+      if (isConfiguredAdmin && isValidPassword) {
         const userProfile: UserAuthProfile = {
-          uid: 'usr_admin_sathvika',
-          displayName: 'Admin Sathvika',
-          email: email.trim().toLowerCase(),
+          uid: 'usr_admin',
+          displayName: 'Admin User',
+          email: normalizedEmail,
           homeCountryCode: 'IN',
           isDiscreetMode: false,
           createdAt: Date.now(),
@@ -387,7 +393,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const idTokenResult = await userCredential.user.getIdTokenResult(true);
-        const isAdmin = !!idTokenResult.claims.admin || userCredential.user.email === 'erumallasathvika2677@gmail.com';
+        const isAdmin = !!idTokenResult.claims.admin || (adminEmail ? userCredential.user.email?.toLowerCase() === adminEmail : false);
 
         if (isAdmin) {
           const userProfile: UserAuthProfile = {

@@ -26,6 +26,7 @@ import { LandingPage } from './components/LandingPage';
 import { AdminDashboard } from './components/AdminDashboard';
 import { StartupScreen } from './components/StartupScreen';
 import { UserDashboard } from './components/UserDashboard';
+import { LiveShare } from './components/LiveShare';
 
 const MainAppContent: React.FC = () => {
   const {
@@ -255,7 +256,7 @@ const AppContent: React.FC = () => {
 
   // Redirect logic
   React.useEffect(() => {
-    if (showStartup || isAuthLoading) return;
+    if (showStartup || isAuthLoading || pathname.startsWith('/live-share')) return;
 
     if (pathname === '/app' && !currentUser) {
       // Redirect to landing if not logged in
@@ -266,6 +267,10 @@ const AppContent: React.FC = () => {
       navigate('/app');
     }
   }, [pathname, currentUser, navigate, openAuthModal, showStartup, isAuthLoading]);
+
+  if (pathname.startsWith('/live-share')) {
+    return <LiveShare />;
+  }
 
   if (showStartup || isAuthLoading) {
     return <StartupScreen onComplete={() => setShowStartup(false)} />;

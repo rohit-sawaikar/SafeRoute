@@ -308,7 +308,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Admin Dashboard Panel */}
-          {currentUser && currentUser.email === 'erumallasathvika2677@gmail.com' && onOpenAdminModal && (
+          {currentUser && currentUser.admin && onOpenAdminModal && (
             <button
               onClick={onOpenAdminModal}
               className="inline-flex whitespace-nowrap items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-500 text-white shadow-xs transition-transform active:scale-95"

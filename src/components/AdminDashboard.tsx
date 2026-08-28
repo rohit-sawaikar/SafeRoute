@@ -44,7 +44,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Simulated admin audit logs and users list
   const [adminUsers, setAdminUsers] = useState<any[]>([
-    { id: 'usr_admin_sathvika', name: 'Admin Sathvika', email: 'erumallasathvika2677@gmail.com', role: 'ADMIN', status: 'ACTIVE', joined: 'Yesterday' },
+    { id: 'usr_admin', name: 'System Admin', email: 'admin@saferoute.org', role: 'ADMIN', status: 'ACTIVE', joined: 'Yesterday' },
     { id: 'usr_priya', name: 'Priya Sharma', email: 'priya.sharma@gmail.com', role: 'USER', status: 'ACTIVE', joined: '2 days ago' },
     { id: 'usr_rohit', name: 'Rohit Mehta', email: 'rohit.mehta@gmail.com', role: 'USER', status: 'ACTIVE', joined: '5 days ago' },
     { id: 'usr_spammer', name: 'Spam User', email: 'spammer123@gmail.com', role: 'USER', status: 'SUSPENDED', joined: '6 days ago' },
@@ -75,8 +75,8 @@ export const AdminDashboard: React.FC = () => {
     return matchesSearch && matchesCategory;
   });
 
-  // Access check: Only Firebase accounts with an actual ADMIN claim/role or designated fallback email can access
-  if (!currentUser || (!currentUser.admin && currentUser.email !== 'erumallasathvika2677@gmail.com')) {
+  // Access check: Only Firebase accounts with an actual ADMIN claim/role can access
+  if (!currentUser || !currentUser.admin) {
     return (
       <div className={`min-h-screen flex flex-col items-center justify-center p-4 font-sans ${isLight ? 'bg-slate-50 text-slate-900' : 'bg-zinc-950 text-zinc-100'
         }`}>

@@ -115,7 +115,7 @@ export const AdminModerationPortal: React.FC<{ isOpen: boolean; onClose: () => v
 
   if (!isOpen) return null;
 
-  if (!currentUser || currentUser.email !== 'erumallasathvika2677@gmail.com') {
+  if (!currentUser || !currentUser.admin) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
         <div className={`relative w-full max-w-md overflow-hidden rounded-2xl border p-8 text-center shadow-2xl space-y-4 ${
