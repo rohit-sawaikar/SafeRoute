@@ -72,5 +72,22 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false; // System admin only
     }
+
+    // USERS COLLECTION (Registered User Profiles)
+    match /users/{userId} {
+      // Authenticated users can read/write their own profile doc; Admins can read all profiles and update status
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // LOGIN ACTIVITY COLLECTION (Authentication Event Logs)
+    match /loginActivity/{logId} {
+      // Authenticated users can create login logs for themselves; Admins can read all login activity logs
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
   }
 }
+

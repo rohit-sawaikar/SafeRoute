@@ -28,7 +28,7 @@ import {
   User,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { auth } from '../services/firebaseClient';
+import { auth, syncUserProfile, recordLoginActivity } from '../services/firebaseClient';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -130,7 +130,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const isLight = theme === 'light';
 
-  const completeAuth = (userProfile: UserAuthProfile) => {
+  const completeAuth = (userProfile: UserAuthProfile, providerId: string = 'password') => {
+    syncUserProfile(userProfile, providerId).catch((err) => console.warn('User profile sync notice:', err));
+    recordLoginActivity(userProfile, providerId).catch((err) => console.warn('Login activity record notice:', err));
+
     onLoginSuccess(userProfile);
     onClose();
     setShowContactOnboarding(false);
@@ -159,6 +162,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const finishLogin = () => {
     if (tempUserProfile) {
+      syncUserProfile(tempUserProfile, 'password').catch((err) => console.warn('User profile sync notice:', err));
+      recordLoginActivity(tempUserProfile, 'password').catch((err) => console.warn('Login activity record notice:', err));
       onLoginSuccess(tempUserProfile);
     }
     onClose();
@@ -248,7 +253,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       setSuccessMessage(`Phone verified! Welcome, ${userProfile.displayName}.`);
       setTimeout(() => {
-        completeAuth(userProfile);
+        completeAuth(userProfile, 'phone');
       }, 700);
     } catch (err: any) {
       setErrorMessage(err.message || 'Verification failed. Please try again.');
@@ -298,7 +303,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         setSuccessMessage('Account created successfully!');
         setTimeout(() => {
-          completeAuth(userProfile);
+          completeAuth(userProfile, 'password');
         }, 700);
       } else {
         const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
@@ -319,7 +324,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         setSuccessMessage('Logged in successfully!');
         setTimeout(() => {
-          completeAuth(userProfile);
+          completeAuth(userProfile, 'password');
         }, 700);
       }
     } catch (err: any) {
@@ -375,6 +380,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           createdAt: user.metadata.creationTime ? new Date(user.metadata.creationTime).getTime() : Date.now(),
           admin: true,
         };
+        syncUserProfile(userProfile, 'password').catch((err) => console.warn('Admin user profile sync notice:', err));
+        recordLoginActivity(userProfile, 'password').catch((err) => console.warn('Admin login activity log notice:', err));
+
         setSuccessMessage('Admin verified! Welcome, Admin.');
         setTimeout(() => {
           onLoginSuccess(userProfile);
@@ -421,7 +429,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       setSuccessMessage(`Google sign-in verified! Welcome, ${userProfile.displayName}.`);
       setTimeout(() => {
-        completeAuth(userProfile);
+        completeAuth(userProfile, 'google.com');
       }, 700);
     } catch (err: any) {
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {

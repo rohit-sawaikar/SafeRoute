@@ -4,7 +4,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { auth, subscribeToAllIncidents } from '../services/firebaseClient';
+import { auth, subscribeToAllIncidents, syncUserProfile } from '../services/firebaseClient';
 import { onAuthStateChanged } from 'firebase/auth';
 import type {
   TravelMode,
@@ -325,6 +325,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           admin: isAdmin,
         };
         setCurrentUser(profile);
+        syncUserProfile(profile).catch((err) => console.warn('Auth state profile sync notice:', err));
       } else {
         setCurrentUser(null);
       }

@@ -239,22 +239,20 @@ export const Header: React.FC<HeaderProps> = ({
           >
             Recent Reports
           </button>
-          {currentUser?.admin && (
-            <button
-              onClick={() => onSelectTab('ai-engine')}
-              className={`whitespace-nowrap px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${activeTab === 'ai-engine'
-                  ? isLight
-                    ? 'bg-white text-cyan-700 shadow-xs font-bold'
-                    : 'bg-cyan-950 text-cyan-200 border border-cyan-800 shadow-xs font-bold'
-                  : isLight
-                    ? 'text-slate-600 hover:text-cyan-700'
-                    : 'text-zinc-400 hover:text-cyan-300'
-                }`}
-            >
-              <Activity className="h-3.5 w-3.5 text-cyan-500" />
-              <span>Safety Tools</span>
-            </button>
-          )}
+          <button
+            onClick={() => onSelectTab('ai-engine')}
+            className={`whitespace-nowrap px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${activeTab === 'ai-engine'
+                ? isLight
+                  ? 'bg-white text-cyan-700 shadow-xs font-bold'
+                  : 'bg-cyan-950 text-cyan-200 border border-cyan-800 shadow-xs font-bold'
+                : isLight
+                  ? 'text-slate-600 hover:text-cyan-700'
+                  : 'text-zinc-400 hover:text-cyan-300'
+              }`}
+          >
+            <Activity className="h-3.5 w-3.5 text-cyan-500" />
+            <span>Safety Tools</span>
+          </button>
         </nav>
 
         {/* Right: Actions, Theme Toggle & Emergency Buttons */}

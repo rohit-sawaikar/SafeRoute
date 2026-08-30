@@ -17,6 +17,8 @@ import {
   updateDoc,
   deleteDoc,
   orderBy,
+  getDoc,
+  limit,
   Unsubscribe,
 } from 'firebase/firestore';
 import {
@@ -46,6 +48,215 @@ export const auth = getAuth(app);
 const BACKEND_BASE_URL =
   (import.meta as any).env.VITE_BACKEND_URL ||
   (typeof window !== 'undefined' ? window.location.origin : '');
+
+/**
+ * ----------------------------------------------------
+ * USER MANAGEMENT & LOGIN ACTIVITY DATA STRUCTURES
+ * ----------------------------------------------------
+ */
+
+export interface RegisteredUserDoc {
+  uid: string;
+  displayName: string;
+  email?: string;
+  phone?: string;
+  createdAt: number;
+  lastLoginAt: number;
+  providerId: string; // 'google.com', 'password', 'phone', etc.
+  status: 'ACTIVE' | 'SUSPENDED';
+  role: 'ADMIN' | 'USER';
+  updatedAt: number;
+}
+
+export interface LoginActivityDoc {
+  id: string;
+  uid: string;
+  displayName: string;
+  email?: string;
+  phone?: string;
+  providerId: string;
+  loginTimestamp: number;
+  status: 'SUCCESS' | 'FAILED';
+  userAgent?: string;
+}
+
+/**
+ * Sync / Create User Profile in Firestore `/users/{uid}`
+ * Preserves original createdAt if doc already exists.
+ */
+export async function syncUserProfile(
+  userProfile: {
+    uid: string;
+    displayName: string;
+    email?: string;
+    phone?: string;
+    createdAt?: number;
+    admin?: boolean;
+  },
+  providerId: string = 'password'
+): Promise<void> {
+  if (!userProfile || !userProfile.uid) return;
+
+  const userRef = doc(db, 'users', userProfile.uid);
+  try {
+    const snap = await getDoc(userRef);
+    const now = Date.now();
+
+    if (snap.exists()) {
+      const existing = snap.data() as RegisteredUserDoc;
+      await updateDoc(userRef, {
+        displayName: userProfile.displayName || existing.displayName || 'SafeRoute User',
+        email: userProfile.email || existing.email || null,
+        phone: userProfile.phone || existing.phone || null,
+        lastLoginAt: now,
+        providerId: providerId || existing.providerId || 'password',
+        role: userProfile.admin ? 'ADMIN' : (existing.role || 'USER'),
+        updatedAt: now,
+      });
+    } else {
+      const newDoc: RegisteredUserDoc = {
+        uid: userProfile.uid,
+        displayName: userProfile.displayName || 'SafeRoute User',
+        email: userProfile.email || undefined,
+        phone: userProfile.phone || undefined,
+        createdAt: userProfile.createdAt || now,
+        lastLoginAt: now,
+        providerId: providerId || 'password',
+        status: 'ACTIVE',
+        role: userProfile.admin ? 'ADMIN' : 'USER',
+        updatedAt: now,
+      };
+      await setDoc(userRef, newDoc);
+    }
+  } catch (err) {
+    console.warn('Firestore user profile sync notice:', err);
+  }
+}
+
+/**
+ * Record a Login Activity Event in Firestore `/loginActivity`
+ */
+export async function recordLoginActivity(
+  userProfile: {
+    uid: string;
+    displayName: string;
+    email?: string;
+    phone?: string;
+  },
+  providerId: string = 'password'
+): Promise<void> {
+  if (!userProfile || !userProfile.uid) return;
+
+  const logId = `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const logRef = doc(db, 'loginActivity', logId);
+
+  const payload: LoginActivityDoc = {
+    id: logId,
+    uid: userProfile.uid,
+    displayName: userProfile.displayName || 'SafeRoute User',
+    email: userProfile.email || undefined,
+    phone: userProfile.phone || undefined,
+    providerId: providerId || 'password',
+    loginTimestamp: Date.now(),
+    status: 'SUCCESS',
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+  };
+
+  try {
+    await setDoc(logRef, payload);
+  } catch (err) {
+    console.warn('Firestore login activity log notice:', err);
+  }
+}
+
+/**
+ * Subscribe to All Registered Users in Firestore
+ */
+export function subscribeToRegisteredUsers(
+  onUpdate: (users: RegisteredUserDoc[]) => void,
+  onError?: (error: any) => void
+): Unsubscribe {
+  const usersRef = collection(db, 'users');
+  return onSnapshot(
+    usersRef,
+    (snapshot) => {
+      const usersList: RegisteredUserDoc[] = [];
+      snapshot.forEach((d) => {
+        const data = d.data();
+        usersList.push({
+          uid: d.id,
+          displayName: data.displayName || 'Registered User',
+          email: data.email || undefined,
+          phone: data.phone || undefined,
+          createdAt: data.createdAt || data.timestamp || Date.now(),
+          lastLoginAt: data.lastLoginAt || data.updatedAt || data.createdAt || Date.now(),
+          providerId: data.providerId || data.authProvider || 'password',
+          authProvider: data.authProvider || data.providerId || 'password',
+          status: data.status || 'ACTIVE',
+          role: data.role || 'USER',
+          updatedAt: data.updatedAt || Date.now(),
+        } as RegisteredUserDoc);
+      });
+      usersList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      onUpdate(usersList);
+    },
+    (err) => {
+      console.warn('Firestore users subscription notice:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Subscribe to Recent Login Activity Events in Firestore
+ */
+export function subscribeToLoginActivity(
+  onUpdate: (logs: LoginActivityDoc[]) => void,
+  onError?: (error: any) => void
+): Unsubscribe {
+  const logsRef = collection(db, 'loginActivity');
+  const q = query(logsRef, orderBy('loginTimestamp', 'desc'), limit(200));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const logsList: LoginActivityDoc[] = [];
+      snapshot.forEach((d) => {
+        const data = d.data();
+        logsList.push({
+          id: d.id,
+          uid: data.uid,
+          displayName: data.displayName || 'SafeRoute User',
+          email: data.email || undefined,
+          phone: data.phone || undefined,
+          providerId: data.providerId || data.authProvider || 'password',
+          loginTimestamp: data.loginTimestamp || data.timestamp || Date.now(),
+          status: data.status || 'SUCCESS',
+          userAgent: data.userAgent || data.ipAddress || 'Web Client (Browser)',
+        } as LoginActivityDoc);
+      });
+      onUpdate(logsList);
+    },
+    (err) => {
+      console.warn('Firestore login activity subscription notice:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Update User Account Status (ACTIVE / SUSPENDED) in Firestore
+ */
+export async function updateUserStatusInFirestore(
+  userId: string,
+  status: 'ACTIVE' | 'SUSPENDED'
+): Promise<void> {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, {
+    status,
+    updatedAt: Date.now(),
+  });
+}
 
 /**
  * ----------------------------------------------------
