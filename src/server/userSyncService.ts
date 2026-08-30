@@ -16,6 +16,9 @@ dotenv.config();
 const PROJECT_ID = process.env.VITE_FIREBASE_PROJECT_ID || 'saferoute-4020c';
 const ADMIN_EMAIL = (process.env.VITE_ADMIN_EMAIL || 'adminsafeheaven09@gmail.com').toLowerCase();
 
+import fs from 'fs';
+import path from 'path';
+
 /**
  * Ensure Firebase Admin App is initialized
  */
@@ -23,6 +26,8 @@ function getAdminInstance() {
   if (!admin.apps.length) {
     try {
       const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_ADMIN_CREDENTIALS;
+      const keyFilePath = process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(process.cwd(), 'serviceAccountKey.json');
+
       if (serviceAccountEnv) {
         const parsedCert = typeof serviceAccountEnv === 'string' && serviceAccountEnv.trim().startsWith('{')
           ? JSON.parse(serviceAccountEnv)
@@ -31,10 +36,19 @@ function getAdminInstance() {
           credential: admin.credential.cert(parsedCert),
           projectId: PROJECT_ID,
         });
+        console.log('[UserSyncService] Initialized Firebase Admin using FIREBASE_SERVICE_ACCOUNT env var.');
+      } else if (fs.existsSync(keyFilePath)) {
+        const fileContent = JSON.parse(fs.readFileSync(keyFilePath, 'utf8'));
+        admin.initializeApp({
+          credential: admin.credential.cert(fileContent),
+          projectId: PROJECT_ID,
+        });
+        console.log(`[UserSyncService] Initialized Firebase Admin using service account key file: ${keyFilePath}`);
       } else {
         admin.initializeApp({
           projectId: PROJECT_ID,
         });
+        console.log('[UserSyncService] Initialized Firebase Admin using default project ID:', PROJECT_ID);
       }
     } catch (err) {
       console.warn('[UserSyncService] Firebase Admin initialize notice:', err);
