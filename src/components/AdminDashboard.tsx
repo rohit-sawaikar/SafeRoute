@@ -51,7 +51,7 @@ export const AdminDashboard: React.FC = () => {
   } = useApp();
 
   const isLight = theme === 'light';
-  const [activeSubTab, setActiveSubTab] = useState<'incidents' | 'users' | 'loginActivity' | 'havens'>('incidents');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'loginActivity' | 'incidents' | 'havens'>('users');
 
   // Incident filter state
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -81,32 +81,33 @@ export const AdminDashboard: React.FC = () => {
     setIsLoadingUsers(true);
     setIsLoadingLogs(true);
 
-    // Sync current logged-in admin if missing in users collection (Backward compatibility)
-    if (currentUser) {
-      syncUserProfile({
-        uid: currentUser.uid,
-        displayName: currentUser.displayName || 'Admin User',
-        email: currentUser.email,
-        phone: currentUser.phone,
-        admin: true,
-      }).catch((err) => console.warn('Admin backward compatibility profile sync notice:', err));
-    }
+    const unsubUsers = subscribeToRegisteredUsers(
+      (users) => {
+        setRegisteredUsers(users);
+        setIsLoadingUsers(false);
+      },
+      (err) => {
+        console.warn('Registered users subscription notice:', err);
+        setIsLoadingUsers(false);
+      }
+    );
 
-    const unsubUsers = subscribeToRegisteredUsers((users) => {
-      setRegisteredUsers(users);
-      setIsLoadingUsers(false);
-    });
-
-    const unsubLogs = subscribeToLoginActivity((logs) => {
-      setLoginLogs(logs);
-      setIsLoadingLogs(false);
-    });
+    const unsubLogs = subscribeToLoginActivity(
+      (logs) => {
+        setLoginLogs(logs);
+        setIsLoadingLogs(false);
+      },
+      (err) => {
+        console.warn('Login activity subscription notice:', err);
+        setIsLoadingLogs(false);
+      }
+    );
 
     return () => {
       unsubUsers();
       unsubLogs();
     };
-  }, [currentUser]);
+  }, [currentUser?.uid, currentUser?.admin]);
 
   // Status Toggling Handler
   const handleToggleUserStatus = async (userId: string, currentStatus: string) => {

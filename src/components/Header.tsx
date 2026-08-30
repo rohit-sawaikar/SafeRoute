@@ -52,6 +52,7 @@ export const Header: React.FC<HeaderProps> = ({
     setTravelMode,
     theme,
     toggleTheme,
+    navigate,
     navigateBack,
     canNavigateBack,
     emergencyContact,
@@ -308,10 +309,10 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Admin Dashboard Panel */}
-          {currentUser && currentUser.admin && onOpenAdminModal && (
+          {currentUser && currentUser.admin && (
             <button
-              onClick={onOpenAdminModal}
-              className="inline-flex whitespace-nowrap items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-500 text-white shadow-xs transition-transform active:scale-95"
+              onClick={() => navigate('/admin')}
+              className="inline-flex whitespace-nowrap items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-500 text-white shadow-xs transition-transform active:scale-95 cursor-pointer"
             >
               <Shield className="h-3.5 w-3.5" />
               <span>Admin Panel</span>
