@@ -85,15 +85,29 @@ export const AdminDashboard: React.FC = () => {
     fetch('/api/safety/admin/sync-users')
       .then((res) => res.json())
       .then((data) => {
-        if (data.success) {
-          console.log(`[AdminDashboard] User sync completed: ${data.syncedCount} users synced.`);
+        if (data.success && Array.isArray(data.users) && data.users.length > 0) {
+          setRegisteredUsers((prev) => {
+            if (prev.length === 0) return data.users;
+            const existingUids = new Set(prev.map((u) => u.uid));
+            const merged = [...prev];
+            for (const syncedUser of data.users) {
+              if (!existingUids.has(syncedUser.uid)) {
+                merged.push(syncedUser);
+              }
+            }
+            return merged.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          });
+          setIsLoadingUsers(false);
+          console.log(`[AdminDashboard] User sync completed: ${data.syncedCount} users loaded into dashboard.`);
         }
       })
       .catch((err) => console.warn('Admin user sync notice:', err));
 
     const unsubUsers = subscribeToRegisteredUsers(
       (users) => {
-        setRegisteredUsers(users);
+        if (users && users.length > 0) {
+          setRegisteredUsers(users);
+        }
         setIsLoadingUsers(false);
       },
       (err) => {
