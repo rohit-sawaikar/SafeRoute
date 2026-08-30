@@ -74,12 +74,22 @@ export const AdminDashboard: React.FC = () => {
   const [loginSearch, setLoginSearch] = useState<string>('');
   const [loginMethodFilter, setLoginMethodFilter] = useState<string>('ALL');
 
-  // Firestore Real-Time Subscriptions
+  // Firestore Real-Time Subscriptions & Background User Sync
   useEffect(() => {
     if (!currentUser || !currentUser.admin) return;
 
     setIsLoadingUsers(true);
     setIsLoadingLogs(true);
+
+    // Trigger server-side sync of existing Firebase Auth users into Firestore /users
+    fetch('/api/safety/admin/sync-users')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          console.log(`[AdminDashboard] User sync completed: ${data.syncedCount} users synced.`);
+        }
+      })
+      .catch((err) => console.warn('Admin user sync notice:', err));
 
     const unsubUsers = subscribeToRegisteredUsers(
       (users) => {

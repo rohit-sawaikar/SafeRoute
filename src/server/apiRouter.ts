@@ -28,9 +28,21 @@ import {
   generateSafetyNotification,
 } from './geminiSafetyEngine.ts';
 
+import { syncAllFirebaseUsersToFirestore } from './userSyncService.ts';
+
 export const safetyApiRouter = Router();
 
 safetyApiRouter.use(express.json({ limit: '10mb' }));
+
+// ADMIN USER SYNCHRONIZATION ENDPOINT
+safetyApiRouter.all('/admin/sync-users', async (req, res) => {
+  try {
+    const result = await syncAllFirebaseUsersToFirestore();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to sync users' });
+  }
+});
 
 // REAL AUTHENTICATION ENDPOINTS
 safetyApiRouter.post('/auth/send-otp', async (req, res) => {
