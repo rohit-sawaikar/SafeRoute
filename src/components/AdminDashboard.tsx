@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
+  auth,
   updateIncidentInFirestore,
   subscribeToRegisteredUsers,
   subscribeToLoginActivity,
@@ -34,6 +35,10 @@ import {
   Filter,
 } from 'lucide-react';
 import { AuthModal } from './AuthModal';
+
+const BACKEND_BASE_URL =
+  (import.meta as any).env.VITE_BACKEND_URL ||
+  (typeof window !== 'undefined' ? window.location.origin : '');
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -76,13 +81,13 @@ export const AdminDashboard: React.FC = () => {
 
   // Firestore Real-Time Subscriptions & Background User Sync
   useEffect(() => {
-    if (!currentUser || !currentUser.admin) return;
+    if (!currentUser || !currentUser.admin || !auth.currentUser) return;
 
     setIsLoadingUsers(true);
     setIsLoadingLogs(true);
 
-    // Trigger server-side sync of existing Firebase Auth users into Firestore /users
-    fetch('/api/safety/admin/sync-users')
+    // Trigger server-side sync of existing Firebase Auth users into Firestore /users using backend URL
+    fetch(`${BACKEND_BASE_URL}/api/safety/admin/sync-users`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.users) && data.users.length > 0) {
