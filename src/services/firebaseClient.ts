@@ -76,6 +76,7 @@ export interface LoginActivityDoc {
   phone?: string;
   providerId: string;
   loginTimestamp: number;
+  eventType: 'LOGIN' | 'LOGOUT';
   status: 'SUCCESS' | 'FAILED';
   userAgent?: string;
 }
@@ -134,7 +135,7 @@ export async function syncUserProfile(
 }
 
 /**
- * Record a Login Activity Event in Firestore `/loginActivity`
+ * Record a Login or Logout Activity Event in Firestore `/loginActivity`
  */
 export async function recordLoginActivity(
   userProfile: {
@@ -143,11 +144,13 @@ export async function recordLoginActivity(
     email?: string;
     phone?: string;
   },
-  providerId: string = 'password'
+  providerId: string = 'password',
+  eventType: 'LOGIN' | 'LOGOUT' = 'LOGIN'
 ): Promise<void> {
   if (!userProfile || !userProfile.uid) return;
 
-  const logId = `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const prefix = eventType === 'LOGOUT' ? 'logout' : 'log';
+  const logId = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const logRef = doc(db, 'loginActivity', logId);
 
   const payload: LoginActivityDoc = {
@@ -158,6 +161,7 @@ export async function recordLoginActivity(
     phone: userProfile.phone || undefined,
     providerId: providerId || 'password',
     loginTimestamp: Date.now(),
+    eventType: eventType,
     status: 'SUCCESS',
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
   };
@@ -165,7 +169,7 @@ export async function recordLoginActivity(
   try {
     await setDoc(logRef, payload);
   } catch (err) {
-    console.warn('Firestore login activity log notice:', err);
+    console.warn('Firestore activity log notice:', err);
   }
 }
 
@@ -208,7 +212,7 @@ export function subscribeToRegisteredUsers(
 }
 
 /**
- * Subscribe to Recent Login Activity Events in Firestore
+ * Subscribe to Recent Login / Logout Activity Events in Firestore
  */
 export function subscribeToLoginActivity(
   onUpdate: (logs: LoginActivityDoc[]) => void,
@@ -231,6 +235,7 @@ export function subscribeToLoginActivity(
           phone: data.phone || undefined,
           providerId: data.providerId || data.authProvider || 'password',
           loginTimestamp: data.loginTimestamp || data.timestamp || Date.now(),
+          eventType: data.eventType || (d.id.startsWith('logout') ? 'LOGOUT' : 'LOGIN'),
           status: data.status || 'SUCCESS',
           userAgent: data.userAgent || data.ipAddress || 'Web Client (Browser)',
         } as LoginActivityDoc);

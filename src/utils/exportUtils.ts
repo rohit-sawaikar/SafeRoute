@@ -131,9 +131,10 @@ export function exportLoginActivityToExcel(logs: LoginActivityDoc[], filter: Dat
     'Display Name': log.displayName || 'SafeRoute User',
     'Email Address': log.email || 'N/A',
     'Phone Number': log.phone || 'N/A',
+    'Event Type': log.eventType || (log.id.startsWith('logout') ? 'LOGOUT' : 'LOGIN'),
     'Authentication Method': formatAuthMethod(log.providerId),
-    'Login Timestamp': formatExcelDateTime(log.loginTimestamp || (log as any).timestamp),
-    'Login Status': log.status || 'SUCCESS',
+    'Event Timestamp': formatExcelDateTime(log.loginTimestamp || (log as any).timestamp),
+    'Event Status': log.status || 'SUCCESS',
     'Device / Environment': log.userAgent || (log as any).ipAddress || 'Web Client (Browser)',
   }));
 
@@ -146,6 +147,7 @@ export function exportLoginActivityToExcel(logs: LoginActivityDoc[], filter: Dat
     { wch: 24 }, // Display Name
     { wch: 28 }, // Email
     { wch: 18 }, // Phone
+    { wch: 14 }, // Event Type
     { wch: 22 }, // Auth Method
     { wch: 24 }, // Timestamp
     { wch: 14 }, // Status
@@ -154,11 +156,11 @@ export function exportLoginActivityToExcel(logs: LoginActivityDoc[], filter: Dat
   worksheet['!cols'] = colWidths;
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Login Activity');
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Activity Log');
 
   const dateSuffix = new Date().toISOString().slice(0, 10);
   const filterLabel = filter.toLowerCase().replace(/_/g, '-');
-  downloadWorkbook(workbook, `SafeRoute_Login_Activity_${filterLabel}_${dateSuffix}.xlsx`);
+  downloadWorkbook(workbook, `SafeRoute_Activity_Log_${filterLabel}_${dateSuffix}.xlsx`);
 }
 
 /**

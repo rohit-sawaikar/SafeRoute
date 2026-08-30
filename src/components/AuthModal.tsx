@@ -518,6 +518,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </button>
               <button
                 onClick={async () => {
+                  if (currentUser) {
+                    recordLoginActivity({
+                      uid: currentUser.uid,
+                      displayName: currentUser.displayName,
+                      email: currentUser.email,
+                      phone: currentUser.phone,
+                    }, 'password', 'LOGOUT').catch((err) => console.warn('Logout log notice:', err));
+                  }
                   try {
                     await auth.signOut();
                   } catch (e) {

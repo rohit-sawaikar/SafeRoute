@@ -715,10 +715,10 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Login Activity Logs Tab */}
+        {/* Login & Logout Activity Logs Tab */}
         {activeSubTab === 'loginActivity' && (
           <div className="space-y-4">
-            {/* Search & Method Filter controls */}
+            {/* Search & Method/Event Filter controls */}
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -739,8 +739,8 @@ export const AdminDashboard: React.FC = () => {
                   className={`px-3 py-2 rounded-xl text-xs border focus:outline-none focus:border-purple-500 ${isLight ? 'bg-white border-slate-350 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-white'
                     }`}
                 >
-                  <option value="ALL">All Login Methods</option>
-                  <option value="password">Password / Email</option>
+                  <option value="ALL">All Auth Methods</option>
+                  <option value="password">Email & Password</option>
                   <option value="google">Google OAuth</option>
                   <option value="phone">Phone SMS OTP</option>
                 </select>
@@ -753,10 +753,11 @@ export const AdminDashboard: React.FC = () => {
                 <thead>
                   <tr className={isLight ? 'bg-slate-100 border-b border-slate-200' : 'bg-zinc-900/60 border-b border-zinc-850'}>
                     <th className="p-3.5 font-bold">Timestamp</th>
+                    <th className="p-3.5 font-bold">Event Type</th>
                     <th className="p-3.5 font-bold">User</th>
                     <th className="p-3.5 font-bold">UID</th>
                     <th className="p-3.5 font-bold">Email / Contact</th>
-                    <th className="p-3.5 font-bold">Login Method</th>
+                    <th className="p-3.5 font-bold">Method</th>
                     <th className="p-3.5 font-bold">Status</th>
                     <th className="p-3.5 font-bold">Device / Environment</th>
                   </tr>
@@ -764,22 +765,32 @@ export const AdminDashboard: React.FC = () => {
                 <tbody className="divide-y divide-slate-100 dark:divide-zinc-900">
                   {isLoadingLogs ? (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-gray-500 font-medium">
+                      <td colSpan={8} className="p-8 text-center text-gray-500 font-medium">
                         <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-purple-500" />
-                        Loading login activity logs from Firestore...
+                        Loading activity logs from Firestore...
                       </td>
                     </tr>
                   ) : filteredLoginLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-gray-500 font-medium">
-                        No login activity logs recorded matching active filters.
+                      <td colSpan={8} className="p-8 text-center text-gray-500 font-medium">
+                        No authentication activity logs recorded matching active filters.
                       </td>
                     </tr>
                   ) : (
                     filteredLoginLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/20">
                         <td className="p-3.5 whitespace-nowrap text-gray-500 dark:text-zinc-400 font-mono text-[11px]">
-                          {formatDate(log.loginTimestamp || log.timestamp || 0)}
+                          {formatDate(log.loginTimestamp || (log as any).timestamp || 0)}
+                        </td>
+
+                        <td className="p-3.5 whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            log.eventType === 'LOGOUT'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-800/30'
+                              : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-800/30'
+                          }`}>
+                            {log.eventType || (log.id.startsWith('logout') ? 'LOGOUT' : 'LOGIN')}
+                          </span>
                         </td>
 
                         <td className="p-3.5 whitespace-nowrap font-bold">
@@ -808,7 +819,7 @@ export const AdminDashboard: React.FC = () => {
                         </td>
 
                         <td className="p-3.5 whitespace-nowrap font-mono text-[10px] text-gray-500 dark:text-zinc-400">
-                          {log.userAgent || log.ipAddress || 'Web Client (Browser)'}
+                          {log.userAgent || (log as any).ipAddress || 'Web Client (Browser)'}
                         </td>
                       </tr>
                     ))
